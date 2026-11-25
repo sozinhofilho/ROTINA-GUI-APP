@@ -4,11 +4,13 @@ import type { Context } from '@netlify/functions'
 import { addDays, diffDays, isISODate, todayISO } from '../../shared/dates.ts'
 import {
   formatZodError,
-  ImportDaySchema,
-  ImportPlanSchema,
   MutateBodySchema,
 } from '../../shared/schemas.ts'
-import { importDayToOps, importPlanToRows } from '../../shared/logic.ts'
+import * as XLSX from 'xlsx'
+import { buildCsv, buildExportSheets, buildWorkbook, exportFileName } from '../../shared/export.ts'
+import { makeExportUrl, verifyExportUrl } from '../lib/export-link.ts'
+import { supabaseStore } from '../lib/store.ts'
+import { importJson, ToolError, updatePlan, type ToolContext, type ToolResult } from '../lib/tools.ts'
 import type { DataResponse } from '../../shared/types.ts'
 import { applyOpDb } from '../lib/mutate.ts'
 import { analyzePhoto, photoAiEnabled } from '../lib/photo-ai.ts'
@@ -18,7 +20,7 @@ import {
   HttpError,
   json,
   loadData,
-  must,
+  env,
   PHOTO_BUCKET,
   readJson,
 } from '../lib/server.ts'
@@ -78,31 +80,57 @@ const mutate: Handler = async (req) => {
   return json({ ok: true, applied: parsed.data.ops.length })
 }
 
+// Importações do app usam as MESMAS funções do conector MCP (diff idempotente do plano, merge do dia).
+function toolCtx(req: Request): ToolContext {
+  const base = env('URL') ?? new URL(req.url).origin
+  return { store: supabaseStore, now: () => new Date(), exportUrl: (f, t, fmt) => makeExportUrl(base, f, t, fmt) }
+}
+
+async function runTool(fn: () => Promise<ToolResult>): Promise<ToolResult> {
+  try {
+    return await fn()
+  } catch (err) {
+    if (err instanceof ToolError) throw new HttpError(400, err.message)
+    throw err
+  }
+}
+
 const importPlan: Handler = async (req) => {
-  const parsed = ImportPlanSchema.safeParse(await readJson(req))
-  if (!parsed.success) throw new HttpError(400, formatZodError(parsed.error))
-  const plan = parsed.data
-  const { meals, workouts } = importPlanToRows(plan)
-  const s = db()
-  if (plan.replace) {
-    if (plan.meals.length) must(await s.from('plan_meals').delete().not('id', 'is', null))
-    if (plan.workouts.length) must(await s.from('plan_workouts').delete().not('id', 'is', null))
-  }
-  if (meals.length) must(await s.from('plan_meals').insert(meals))
-  if (workouts.length) must(await s.from('plan_workouts').insert(workouts))
-  if (plan.settings && Object.keys(plan.settings).length) {
-    must(await s.from('settings').update({ ...plan.settings, updated_at: new Date().toISOString() }).eq('id', 1))
-  }
-  return json({ ok: true, meals: meals.length, workouts: workouts.length })
+  const body = await readJson(req)
+  const r = await runTool(() => updatePlan(toolCtx(req), { plan_json: body, confirm: true }))
+  return json({ ok: true, operations: r.data.operations, summary: r.text })
 }
 
 const importDay: Handler = async (req) => {
-  const parsed = ImportDaySchema.safeParse(await readJson(req))
-  if (!parsed.success) throw new HttpError(400, formatZodError(parsed.error))
-  const data = await loadData(parsed.data.date, parsed.data.date)
-  const ops = importDayToOps(parsed.data, data)
-  for (const op of ops) await applyOpDb(op)
-  return json({ ok: true, applied: ops.length })
+  const body = await readJson(req)
+  if (Array.isArray(body) || !body || typeof body !== 'object' || !('date' in body)) {
+    throw new HttpError(400, 'esperado um objeto com "date"')
+  }
+  const r = await runTool(() => importJson(toolCtx(req), { payload: body, confirm: true }))
+  return json({ ok: true, applied: r.data.operations, summary: r.text })
+}
+
+const exportFile: Handler = async (_req, url) => {
+  if (!verifyExportUrl(url.searchParams)) throw new HttpError(403, 'link expirado ou inválido')
+  const from = url.searchParams.get('from')!
+  const to = url.searchParams.get('to')!
+  const format = url.searchParams.get('format') === 'csv' ? 'csv' : 'xlsx'
+  if (!isISODate(from) || !isISODate(to) || from > to) throw new HttpError(400, 'from/to inválidos')
+  const today = todayISO()
+  const data = await loadData(from, to)
+  const sheets = buildExportSheets(data, from, to, today)
+  const name = exportFileName(from, to, today, format)
+  const body =
+    format === 'csv'
+      ? new TextEncoder().encode(buildCsv(XLSX, sheets))
+      : new Uint8Array(XLSX.write(buildWorkbook(XLSX, sheets) as XLSX.WorkBook, { type: 'buffer', bookType: 'xlsx' }) as Buffer)
+  return new Response(body, {
+    headers: {
+      'content-type': format === 'csv' ? 'text/csv; charset=utf-8' : 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+      'content-disposition': `attachment; filename="${name}"`,
+      'cache-control': 'no-store',
+    },
+  })
 }
 
 const uploadPhoto: Handler = async (req, url) => {
@@ -176,7 +204,7 @@ const stravaWebhook: Handler = async (req, url, ctx) => {
       if (!(await ownerMatches(ev.owner_id!))) return
       if (ev.aspect_type === 'delete') await deleteActivity(ev.object_id!)
       else await importActivity(ev.object_id!)
-    })().catch((err) => console.error('strava webhook', err))
+    })().catch((err) => console.error('strava webhook:', err instanceof Error ? err.constructor.name : 'erro'))
     ctx.waitUntil(work)
   }
   return json({ ok: true })
@@ -198,6 +226,7 @@ const routes: Record<string, { method: string[]; handler: Handler; public?: bool
   '/api/mutate': { method: ['POST'], handler: mutate },
   '/api/import-plan': { method: ['POST'], handler: importPlan },
   '/api/import-day': { method: ['POST'], handler: importDay },
+  '/api/export-file': { method: ['GET'], handler: exportFile, public: true },
   '/api/photo': { method: ['POST'], handler: uploadPhoto },
   '/api/photo/delete': { method: ['POST'], handler: deletePhoto },
   '/api/analyze-photo': { method: ['POST'], handler: analyze },
@@ -218,7 +247,8 @@ export default async (req: Request, ctx: Context): Promise<Response> => {
     return await route.handler(req, url, ctx)
   } catch (err) {
     if (err instanceof HttpError) return json({ error: err.message }, err.status)
-    console.error(err)
+    // Só o tipo do erro: mensagens do banco podem conter dados de saúde.
+    console.error('api:', err instanceof Error ? err.constructor.name : 'erro')
     return json({ error: 'erro interno' }, 500)
   }
 }

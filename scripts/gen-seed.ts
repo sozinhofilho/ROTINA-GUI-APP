@@ -1,6 +1,6 @@
 // Gera supabase/migrations/0002_seed.sql e supabase/setup.sql a partir de supabase/seed-plan.json.
 // Uso: node scripts/gen-seed.ts
-import { readFileSync, writeFileSync } from 'node:fs'
+import { readdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { ImportPlanSchema } from '../shared/schemas.ts'
 import { importPlanToRows } from '../shared/logic.ts'
 
@@ -52,9 +52,12 @@ lines.push('', 'commit;', '')
 
 const seed = lines.join('\n')
 writeFileSync(new URL('supabase/migrations/0002_seed.sql', root), seed)
-const init = readFileSync(new URL('supabase/migrations/0001_init.sql', root), 'utf8')
+// Schema = todas as migrações exceto o seed, em ordem; o seed vai por último.
+const migDir = new URL('supabase/migrations/', root)
+const schemaFiles = readdirSync(migDir).filter((f) => f.endsWith('.sql') && !f.includes('_seed')).sort()
+const init = schemaFiles.map((f) => `-- ===== ${f} =====\n${readFileSync(new URL(f, migDir), 'utf8')}`).join('\n')
 writeFileSync(
   new URL('supabase/setup.sql', root),
-  `-- Arquivo único para colar no SQL Editor do Supabase (= 0001_init.sql + 0002_seed.sql).\n\n${init}\n${seed}`,
+  `-- Arquivo único para colar no SQL Editor do Supabase (= todas as migrações + seed).\n\n${init}\n${seed}`,
 )
 console.log(`seed: ${meals.length} refeições, ${workouts.length} treinos`)

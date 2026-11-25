@@ -9,6 +9,7 @@ const hhmm = z.string().regex(/^([01]\d|2[0-3]):[0-5]\d$/, 'horário deve ser HH
 const uuid = z.string().uuid()
 const kcal = z.number().int().min(0).max(20000)
 const macro = z.number().min(0).max(2000).nullable()
+export const pace = z.string().regex(/^\d{1,2}:[0-5]\d$/, 'pace deve ser mm:ss (min/km), ex.: 5:30')
 const shortText = z.string().max(300)
 const longText = z.string().max(4000)
 
@@ -99,6 +100,7 @@ export const WorkoutLogSchema = z.object({
   kcal: kcal.nullable(),
   distance_m: z.number().min(0).max(1_000_000).nullable(),
   avg_hr: z.number().min(0).max(260).nullable(),
+  avg_pace: pace.nullable(),
   note: longText,
   source: z.enum(['manual', 'strava', 'import']),
   strava_activity_id: z.number().int().nullable(),
@@ -183,28 +185,31 @@ const WeekdaysField = z
     return [...new Set(flat)].sort()
   })
 
+// Campos omitidos: em item novo usam o padrão; em item que já existe (mesmo dia + nome) mantêm o valor atual.
 const ImportMeal = z.object({
   weekdays: WeekdaysField.default([0, 1, 2, 3, 4, 5, 6]),
   name: z.string().min(1).max(80),
-  time: hhmm,
-  description: longText.default(''),
-  items: z.array(MealItemSchema.extend({ kcal: kcal.nullable().default(null) })).max(40).default([]),
-  kcal,
-  protein: macro.default(null),
-  carbs: macro.default(null),
-  fat: macro.default(null),
+  time: hhmm.optional(),
+  description: longText.optional(),
+  items: z.array(MealItemSchema.extend({ kcal: kcal.nullable().default(null) })).max(40).optional(),
+  kcal: kcal.optional(),
+  protein: macro.optional(),
+  carbs: macro.optional(),
+  fat: macro.optional(),
 })
+export type ImportMealInput = z.infer<typeof ImportMeal>
 
 const ImportWorkout = z.object({
   weekdays: WeekdaysField,
   name: z.string().min(1).max(80),
-  kind: WorkoutKindSchema.default('other'),
-  time: hhmm.nullable().default(null),
-  details: longText.default(''),
-  exercises: z.array(ExerciseSchema).max(40).default([]),
-  duration_min: z.number().int().min(0).max(1440).nullable().default(null),
-  kcal: kcal.nullable().default(null),
+  kind: WorkoutKindSchema.optional(),
+  time: hhmm.nullable().optional(),
+  details: longText.optional(),
+  exercises: z.array(ExerciseSchema).max(40).optional(),
+  duration_min: z.number().int().min(0).max(1440).nullable().optional(),
+  kcal: kcal.nullable().optional(),
 })
+export type ImportWorkoutInput = z.infer<typeof ImportWorkout>
 
 export const ImportPlanSchema = z.object({
   replace: z.boolean().default(true),
@@ -250,6 +255,7 @@ export const ImportDaySchema = z.object({
         kcal: kcal.nullable().default(null),
         distance_km: z.number().min(0).max(1000).nullable().default(null),
         avg_hr: z.number().min(0).max(260).nullable().default(null),
+        avg_pace: pace.nullable().default(null),
         note: longText.default(''),
       }),
     )

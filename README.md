@@ -9,7 +9,7 @@ App pessoal (PWA) para acompanhar dieta e treinos todo dia, pelo celular, sem lo
 
 ## Instalação (uma vez)
 
-1. **Supabase** (plano gratuito): crie um projeto, abra *SQL Editor*, cole o conteúdo de `supabase/setup.sql` e rode. Isso cria as tabelas, a view `daily_summary`, o bucket privado `photos` e carrega o plano inicial (dieta 2.500 kcal + treino HYROX). Em *Project Settings → API* copie a **Project URL** e a chave **service_role**.
+1. **Supabase** (plano gratuito): crie um projeto, abra *SQL Editor*, cole o conteúdo de `supabase/setup.sql` e rode (pode rodar de novo sem problema; ao rodar de novo, o plano volta ao do seed). Isso cria as tabelas, a view `daily_summary`, o bucket privado `photos` e carrega o plano inicial (dieta 2.500 kcal + treino HYROX). Em *Project Settings → API* copie a **Project URL** e a chave **service_role**.
 2. **Netlify:** *Add new site → Import from GitHub* → este repositório. Build e pasta já vêm do `netlify.toml`.
 3. **Variáveis de ambiente** (Site configuration → Environment variables):
 
@@ -22,6 +22,8 @@ App pessoal (PWA) para acompanhar dieta e treinos todo dia, pelo celular, sem lo
 | `ANTHROPIC_API_KEY` | só se ligar a IA de fotos |
 | `STRAVA_CLIENT_ID`, `STRAVA_CLIENT_SECRET` | fase 2 |
 | `STRAVA_VERIFY_TOKEN` | opcional (fase 2) |
+| `MCP_TOKEN` | token do conector do Claude (diferente do `APP_TOKEN`), ver "Conectar ao Claude" |
+| `MCP_ALLOW_PATH_TOKEN` | só `true` se precisar do plano B do conector (padrão: não definir) |
 
 4. *Deploys → Trigger deploy*. Abra `https://SEU-SITE.netlify.app/?k=APP_TOKEN` no celular e use "Adicionar à tela de início".
 
@@ -99,15 +101,82 @@ Com `ENABLE_PHOTO_AI=true` e `ANTHROPIC_API_KEY`, aparece o botão "Estimar calo
 
 Tokens do Strava ficam só no banco (`strava_tokens`) e nas Functions.
 
+## Conectar ao Claude (MCP)
+
+O app tem um servidor MCP em `https://SEU-SITE.netlify.app/mcp` (Streamable HTTP, sem sessão) para você registrar e consultar tudo conversando com o Claude, no claude.ai ou no app do celular, sem abrir a Rotina. Ele usa as mesmas funções do app: mesmas regras de meta e saldo, mesma importação, mesmo banco.
+
+### 1. Gerar o MCP_TOKEN
+
+No terminal (Mac/Linux): `openssl rand -base64 48 | tr '+/' '-_' | tr -d '='`. Use um valor **diferente** do `APP_TOKEN`.
+
+### 2. Configurar na Netlify
+
+*Site configuration → Environment variables → Add a variable*: `MCP_TOKEN` = o valor gerado. Depois *Deploys → Trigger deploy*.
+Teste rápido: `curl -i -X POST https://SEU-SITE.netlify.app/mcp` deve responder `401` (sem token).
+
+### 3. Cadastrar o conector no Claude
+
+No claude.ai (navegador): **Customize → Connectors → Add → Add custom connector**.
+
+1. **Name:** `Rotina`
+2. **Remote MCP server URL:** `https://SEU-SITE.netlify.app/mcp` → *Continue*
+3. **Authentication:** *No sign-in*
+4. **Request headers:** header `authorization`, valor `Bearer SEU_MCP_TOKEN` (com a palavra `Bearer` e um espaço; o Claude envia exatamente o que você digitar), marcar como obrigatório → *Add*
+5. Numa conversa: botão **+ → Connectors →** ligue **Rotina**. Conectores da conta também aparecem no app do celular.
+
+Para trocar o token depois: remova o conector e cadastre de novo (headers não podem ser editados).
+
+**Se a seção "Request headers" não aparecer:** a Anthropic ainda está liberando esse recurso (beta) aos poucos. Plano B sem mudar código: na Netlify defina `MCP_ALLOW_PATH_TOKEN=true` e cadastre a URL `https://SEU-SITE.netlify.app/mcp/SEU_MCP_TOKEN` com *No sign-in*. Funciona, mas o token fica na URL (trate a URL como senha). A alternativa definitiva é um OAuth mínimo (um usuário, login por senha) no próprio site.
+
+### Ferramentas
+
+| Ferramenta | O que faz |
+|---|---|
+| `get_day(date)` | plano do dia, o que foi feito, extras, kcal ingeridas, gastas, saldo, meta |
+| `get_range(from, to)` | métricas do período (adesão, médias, dias na meta, sequência) e cada dia |
+| `get_plan()` | plano semanal com ids |
+| `set_meal_done(date, meal_id, done, kcal_real?, note?)` | marca/desmarca refeição (id ou nome, ex.: "almoço") |
+| `log_workout(date, workout_id?, type, duration_min, distance_km?, avg_pace?, avg_hr?, kcal?, source?, note?)` | registra treino; sem id cumpre o previsto do mesmo tipo |
+| `add_extra(date, description, kcal, time?)` | extra fora do plano (álcool é detectado pela descrição) |
+| `remove_entry(date, entry_type, entry_id)` | desfaz refeição, treino, extra ou troca de dia |
+| `move_workout(from_date, to_date, workout_id?)` | troca o treino de dia só naquela data |
+| `update_plan(plan_json, confirm=false)` | prévia das diferenças; grava só com `confirm=true` |
+| `import_json(payload, confirm=false)` | lançamentos do dia (ou plano) com prévia e merge idempotente |
+| `get_export(from, to, format)` | link de 1 hora, assinado, para baixar o .xlsx ou .csv |
+
+Todas as escritas são idempotentes: repetir a mesma frase não duplica nada. `date` omitido = hoje (America/Sao_Paulo).
+
+### Exemplos de frases
+
+| Você fala | O Claude chama |
+|---|---|
+| "marquei o almoço" | `set_meal_done(meal_id: "almoço", done: true)` |
+| "almocei fora, umas 900 kcal" | `set_meal_done(meal_id: "almoço", kcal_real: 900)` |
+| "não comi a ceia ontem" | `set_meal_done(date: ontem, meal_id: "ceia", done: false)` |
+| "bebi duas cervejas de 350 ml" | `add_extra(description: "2 cervejas 350 ml", kcal: ~300)` (categoria álcool automática) |
+| "fiz o HYROX, 62 min, 740 kcal, FC 151" | `log_workout(type: "hyrox", duration_min: 62, kcal: 740, avg_hr: 151)` |
+| "corri 6 km em 33 min, pace 5:30" | `log_workout(type: "run", duration_min: 33, distance_km: 6, avg_pace: "5:30")` |
+| "troquei o treino de sexta para sábado" | `move_workout(from_date: sexta, to_date: sábado)` |
+| "desfaz a cerveja" | `get_day` → `remove_entry(entry_type: "extra", entry_id: …)` |
+| "como estou hoje?" | `get_day()` |
+| "como foi minha semana?" | `get_range(segunda, domingo)` |
+| "qual meu treino de quinta?" | `get_plan()` |
+| "muda a ceia para 22h" | `update_plan(…)` mostra a prévia → você confirma → `confirm: true` |
+| "me manda a planilha de novembro" | `get_export(from: "2026-11-01", to: "2026-11-30", format: "xlsx")` |
+
+### Segurança
+
+Token comparado em tempo constante; sem token ou token errado: `401` sem detalhes. Os logs registram só o tipo do erro, nunca token, corpo da requisição ou dados de saúde. O link de exportação é assinado com HMAC (chave derivada do `MCP_TOKEN`), expira em 1 hora e não contém o token.
+
 ## Estrutura
 
 ```
 shared/            tipos, validação (zod), cálculos e lógica usados no front e nas Functions
-netlify/functions/ api.mts (roteador /api/*)
-netlify/lib/       auth, Supabase, mutações, Strava, IA de foto
+netlify/functions/ api.mts (roteador /api/*) e mcp.mts (conector do Claude em /mcp)
+netlify/lib/       store (dados), tools (casos de uso do MCP e das importações), mcp, auth, Strava, IA de foto
 src/               app React (telas Hoje, Plano, Resumo, Exportar)
 supabase/          migrações, seed e setup.sql (tudo junto)
-tests/             testes das regras (vitest)
+tests/             testes das regras e de cada ferramenta MCP (vitest)
 ```
 
 Observação: a exportação usa o pacote `xlsx` (SheetJS) 0.18.5 do npm, só para **gerar** planilhas; os alertas de segurança conhecidos dessa versão afetam a leitura de arquivos, que o app não faz.

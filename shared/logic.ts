@@ -1,9 +1,10 @@
 // Lógica pura compartilhada: aplicar operações localmente (otimista/offline),
 // converter importações em operações e escolher qual treino uma atividade cumpre.
-import type { Op, ImportDay, ImportPlan } from './schemas.ts'
+import type { Op, ImportDay, ImportMealInput, ImportPlan, ImportWorkoutInput } from './schemas.ts'
 import { normalizeText } from './schemas.ts'
 import type { AppData, MealLog, PlanMeal, PlanWorkout, WorkoutKind, WorkoutLog } from './types.ts'
 import { expandDay, type DayWorkout } from './calc.ts'
+import { stableId } from './ids.ts'
 
 export const uuid = (): string => crypto.randomUUID()
 
@@ -87,47 +88,53 @@ export function applyOp(data: AppData, op: Op): AppData {
   }
 }
 
-/** Expande o JSON de plano em linhas (uma por dia da semana). */
+export class PlanError extends Error {}
+
+/** Monta uma refeição do plano a partir do JSON; `base` (item existente) preenche o que foi omitido. */
+export function buildPlanMeal(m: ImportMealInput, weekday: number, sort: number, base?: PlanMeal): PlanMeal {
+  const time = m.time ?? base?.time
+  const kcal = m.kcal ?? base?.kcal
+  if (time === undefined || kcal === undefined) throw new PlanError(`refeição "${m.name}": informe time e kcal (item novo)`)
+  return {
+    id: base?.id ?? uuid(),
+    weekday,
+    name: m.name,
+    time,
+    description: m.description ?? base?.description ?? '',
+    items: m.items ?? base?.items ?? [],
+    kcal,
+    protein: m.protein !== undefined ? m.protein : (base?.protein ?? null),
+    carbs: m.carbs !== undefined ? m.carbs : (base?.carbs ?? null),
+    fat: m.fat !== undefined ? m.fat : (base?.fat ?? null),
+    sort,
+  }
+}
+
+export function buildPlanWorkout(w: ImportWorkoutInput, weekday: number, sort: number, base?: PlanWorkout): PlanWorkout {
+  const pick = <K extends keyof PlanWorkout>(k: K, fallback: PlanWorkout[K]): PlanWorkout[K] =>
+    (w as Record<string, unknown>)[k] !== undefined ? ((w as Record<string, unknown>)[k] as PlanWorkout[K]) : base ? base[k] : fallback
+  return {
+    id: base?.id ?? uuid(),
+    weekday,
+    name: w.name,
+    kind: pick('kind', 'other'),
+    time: pick('time', null),
+    details: pick('details', ''),
+    exercises: pick('exercises', []),
+    duration_min: pick('duration_min', null),
+    kcal: pick('kcal', null),
+    sort,
+  }
+}
+
+/** Expande o JSON de plano em linhas novas (uma por dia da semana). */
 export function importPlanToRows(plan: ImportPlan): { meals: PlanMeal[]; workouts: PlanWorkout[] } {
-  const meals: PlanMeal[] = []
-  plan.meals.forEach((m, i) => {
-    for (const weekday of m.weekdays) {
-      meals.push({
-        id: uuid(),
-        weekday,
-        name: m.name,
-        time: m.time,
-        description: m.description,
-        items: m.items,
-        kcal: m.kcal,
-        protein: m.protein,
-        carbs: m.carbs,
-        fat: m.fat,
-        sort: i,
-      })
-    }
-  })
-  const workouts: PlanWorkout[] = []
-  plan.workouts.forEach((w, i) => {
-    for (const weekday of w.weekdays) {
-      workouts.push({
-        id: uuid(),
-        weekday,
-        name: w.name,
-        kind: w.kind,
-        time: w.time,
-        details: w.details,
-        exercises: w.exercises,
-        duration_min: w.duration_min,
-        kcal: w.kcal,
-        sort: i,
-      })
-    }
-  })
+  const meals = plan.meals.flatMap((m, i) => m.weekdays.map((wd) => buildPlanMeal(m, wd, i)))
+  const workouts = plan.workouts.flatMap((w, i) => w.weekdays.map((wd) => buildPlanWorkout(w, wd, i)))
   return { meals, workouts }
 }
 
-function sameName(a: string, b: string): boolean {
+export function sameName(a: string, b: string): boolean {
   const x = normalizeText(a)
   const y = normalizeText(b)
   return x === y || x.includes(y) || y.includes(x)
@@ -139,12 +146,15 @@ export function importDayToOps(day: ImportDay, data: AppData): Op[] {
   const ops: Op[] = []
 
   for (const m of day.meals) {
-    const match = view.meals.find((x) => x.plan && sameName(x.name, m.name))
-    const existing = match?.log
+    const match =
+      view.meals.find((x) => x.plan && normalizeText(x.name) === normalizeText(m.name)) ??
+      view.meals.find((x) => x.plan && sameName(x.name, m.name))
+    const orphan = !match ? view.meals.find((x) => !x.plan && x.log && normalizeText(x.name) === normalizeText(m.name)) : undefined
+    const existing = match?.log ?? orphan?.log
     ops.push({
       t: 'meal_log.upsert',
       row: {
-        id: existing?.id ?? uuid(),
+        id: existing?.id ?? stableId('meal', day.date, match?.plan?.id ?? m.name),
         date: day.date,
         plan_meal_id: match?.plan?.id ?? null,
         meal_name: match?.plan?.name ?? m.name,
@@ -159,7 +169,8 @@ export function importDayToOps(day: ImportDay, data: AppData): Op[] {
   }
 
   for (const e of day.extras) {
-    ops.push({ t: 'extra.upsert', row: { id: uuid(), date: day.date, ...e } })
+    // Mesmo extra (data, descrição, kcal, horário) = mesmo id: reimportar não duplica.
+    ops.push({ t: 'extra.upsert', row: { id: extraId(day.date, e.description, e.kcal, e.time), date: day.date, ...e } })
   }
 
   const used = new Set<string>()
@@ -168,11 +179,14 @@ export function importDayToOps(day: ImportDay, data: AppData): Op[] {
       (x) => x.plan && !used.has(x.plan.id) && sameName(x.plan.name, w.name),
     )
     if (match?.plan) used.add(match.plan.id)
-    const existing = match?.log
+    const orphan = !match
+      ? view.workouts.find((x) => !x.plan && x.log && normalizeText(x.log.name) === normalizeText(w.name))
+      : undefined
+    const existing = match?.log ?? orphan?.log
     ops.push({
       t: 'workout_log.upsert',
       row: {
-        id: existing?.id ?? uuid(),
+        id: existing?.id ?? stableId('workout', day.date, match?.plan?.id ?? w.name),
         date: day.date,
         plan_workout_id: match?.plan?.id ?? null,
         name: match?.plan?.name ?? w.name,
@@ -181,13 +195,88 @@ export function importDayToOps(day: ImportDay, data: AppData): Op[] {
         kcal: w.kcal ?? existing?.kcal ?? match?.plan?.kcal ?? null,
         distance_m: w.distance_km != null ? Math.round(w.distance_km * 1000) : (existing?.distance_m ?? null),
         avg_hr: w.avg_hr ?? existing?.avg_hr ?? null,
+        avg_pace: w.avg_pace ?? existing?.avg_pace ?? null,
         note: w.note || existing?.note || '',
         source: existing?.source === 'strava' ? 'strava' : 'import',
         strava_activity_id: existing?.strava_activity_id ?? null,
       },
     })
   }
-  return ops
+  return pruneNoops(ops, data)
+}
+
+export function extraId(date: string, description: string, kcal: number, time: string | null): string {
+  return stableId('extra', date, description, kcal, time)
+}
+
+function sameRow(a: object, b: object): boolean {
+  const x = a as Record<string, unknown>
+  const y = b as Record<string, unknown>
+  return Object.keys(x).every((k) => k === 'id' || JSON.stringify(x[k] ?? null) === JSON.stringify(y[k] ?? null))
+}
+
+/** Remove operações que não mudariam nada (base da idempotência e das prévias). */
+export function pruneNoops(ops: Op[], data: AppData): Op[] {
+  const out: Op[] = []
+  let cur = data
+  for (const op of ops) {
+    if (!isNoop(op, cur)) {
+      out.push(op)
+      cur = applyOp(cur, op)
+    }
+  }
+  return out
+}
+
+export function isNoop(op: Op, data: AppData): boolean {
+  switch (op.t) {
+    case 'meal_log.upsert': {
+      const r = op.row
+      const ex = data.meal_logs.find((x) => x.id === r.id || (r.plan_meal_id != null && x.date === r.date && x.plan_meal_id === r.plan_meal_id))
+      return !!ex && sameRow(r, ex)
+    }
+    case 'workout_log.upsert': {
+      const r = op.row
+      const ex = data.workout_logs.find((x) => x.id === r.id || (r.plan_workout_id != null && x.date === r.date && x.plan_workout_id === r.plan_workout_id))
+      return !!ex && sameRow(r, ex)
+    }
+    case 'extra.upsert': {
+      const ex = data.extras.find((x) => x.id === op.row.id)
+      return !!ex && sameRow(op.row, ex)
+    }
+    case 'override.upsert': {
+      const ex = data.overrides.find((x) => x.plan_workout_id === op.row.plan_workout_id && x.from_date === op.row.from_date)
+      return !!ex && ex.to_date === op.row.to_date
+    }
+    case 'plan_meal.upsert': {
+      const ex = data.plan_meals.find((x) => x.id === op.row.id)
+      return !!ex && sameRow(op.row, ex)
+    }
+    case 'plan_workout.upsert': {
+      const ex = data.plan_workouts.find((x) => x.id === op.row.id)
+      return !!ex && sameRow(op.row, ex)
+    }
+    case 'settings.update': {
+      const s = data.settings as unknown as Record<string, unknown>
+      return Object.entries(op.row).every(([k, v]) => s[k] === v)
+    }
+    case 'meal_log.delete':
+      return !data.meal_logs.some((x) => x.id === op.id)
+    case 'workout_log.delete':
+      return !data.workout_logs.some((x) => x.id === op.id)
+    case 'extra.delete':
+      return !data.extras.some((x) => x.id === op.id)
+    case 'override.delete':
+      return !data.overrides.some((x) => x.id === op.id)
+    case 'plan_meal.delete':
+      return !data.plan_meals.some((x) => x.id === op.id)
+    case 'plan_workout.delete':
+      return !data.plan_workouts.some((x) => x.id === op.id)
+    case 'workout_log.assign': {
+      const ex = data.workout_logs.find((x) => x.id === op.id)
+      return !ex || (ex.plan_workout_id === op.plan_workout_id && ex.done)
+    }
+  }
 }
 
 const RUN_TYPES = ['Run', 'TrailRun', 'VirtualRun', 'Walk', 'Hike']

@@ -68,7 +68,7 @@ describe('regras de cálculo', () => {
     d = applyOp(d, { t: 'settings.update', row: { tolerance_pct: 25 } })
     expect(expandDay(WED, d).stats.status).toBe('dentro')
     const w = expandDay(WED, d).workouts[0]
-    d = applyOp(d, { t: 'workout_log.upsert', row: { id: crypto.randomUUID(), date: WED, plan_workout_id: w.plan!.id, name: 'HYROX', done: true, duration_min: 60, kcal: 700, distance_m: null, avg_hr: null, note: '', source: 'manual', strava_activity_id: null } })
+    d = applyOp(d, { t: 'workout_log.upsert', row: { id: crypto.randomUUID(), date: WED, plan_workout_id: w.plan!.id, name: 'HYROX', done: true, duration_min: 60, kcal: 700, distance_m: null, avg_hr: null, avg_pace: null, note: '', source: 'manual', strava_activity_id: null } })
     expect(expandDay(WED, d).stats).toMatchObject({ spent: 700, balance: null })
     d = applyOp(d, { t: 'settings.update', row: { base_expenditure: 2000 } })
     expect(expandDay(WED, d).stats).toMatchObject({ spent: 2700, balance: -700 })

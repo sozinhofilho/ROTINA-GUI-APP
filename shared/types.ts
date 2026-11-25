@@ -90,6 +90,8 @@ export interface WorkoutLog {
   kcal: number | null
   distance_m: number | null
   avg_hr: number | null
+  /** Pace médio, ex.: "5:30" (min/km). */
+  avg_pace: string | null
   note: string
   source: WorkoutSource
   strava_activity_id: number | null

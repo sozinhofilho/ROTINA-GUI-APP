@@ -5,6 +5,9 @@
 [build.environment]
   NODE_VERSION = "22"
 
+# O conector do Claude fica em /mcp: a Function netlify/functions/mcp.mts declara
+# config.path = ["/mcp", "/mcp/*"], que é o rewrite nativo da Netlify para Functions.
+
 [functions]
   directory = "netlify/functions"
   node_bundler = "esbuild"

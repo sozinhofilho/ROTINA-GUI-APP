@@ -334,10 +334,10 @@ function ImportPlanSheet({ open, onClose }: { open: boolean; onClose: () => void
     if (!v.ok) return setMsg(v)
     setBusy(true)
     try {
-      const r = await postJson<{ meals: number; workouts: number }>('/api/import-plan', v.raw)
+      const r = await postJson<{ operations: number }>('/api/import-plan', v.raw)
       invalidate()
       await ensureRange(addDays(todayISO(), -7), addDays(todayISO(), 14), { force: true })
-      toast(`Plano importado: ${r.meals} refeições, ${r.workouts} treinos`)
+      toast(r.operations ? `Plano importado: ${r.operations} alteração(ões)` : 'Nada mudou: o plano já estava assim')
       setText('')
       setMsg(null)
       onClose()
@@ -355,7 +355,7 @@ function ImportPlanSheet({ open, onClose }: { open: boolean; onClose: () => void
     const wRows = v.plan.workouts.reduce((s, w) => s + w.weekdays.length, 0)
     setMsg({
       ok: true,
-      text: `Válido: ${v.plan.meals.length} refeições (${mealRows} no total da semana), ${v.plan.workouts.length} treinos (${wRows} na semana). ${v.plan.replace ? 'Vai SUBSTITUIR o plano atual das seções enviadas.' : 'Vai ADICIONAR ao plano atual.'}`,
+      text: `Válido: ${v.plan.meals.length} refeições (${mealRows} no total da semana), ${v.plan.workouts.length} treinos (${wRows} na semana). ${v.plan.replace ? 'Vai SUBSTITUIR o plano atual das seções enviadas (itens com o mesmo dia e nome são atualizados, mantendo o histórico).' : 'Vai ADICIONAR ao plano atual.'}`,
     })
   }
 

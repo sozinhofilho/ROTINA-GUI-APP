@@ -297,6 +297,7 @@ function WorkoutCard({ date, item, data }: { date: string; item: DayWorkout; dat
       kcal: plan?.kcal ?? null,
       distance_m: null,
       avg_hr: null,
+      avg_pace: null,
       note: '',
       source: 'manual',
       strava_activity_id: null,
@@ -320,6 +321,7 @@ function WorkoutCard({ date, item, data }: { date: string; item: DayWorkout; dat
           <span className="muted small">
             {log?.duration_min ?? plan?.duration_min ?? '–'} min · {fmt(log?.kcal ?? plan?.kcal ?? 0)} kcal
             {log?.distance_m ? ` · ${(log.distance_m / 1000).toFixed(1)} km` : ''}
+            {log?.avg_pace ? ` · ${log.avg_pace}/km` : ''}
             {log?.avg_hr ? ` · FC ${Math.round(log.avg_hr)}` : ''}
             {!log?.done && plan?.kcal != null && ' (estimado)'}
           </span>

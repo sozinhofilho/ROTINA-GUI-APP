@@ -104,7 +104,7 @@ export async function loadData(from: string, to: string): Promise<AppData> {
     workout_logs: (must(workoutLogs) as Row[]).map((r) => ({
       id: String(r.id), date: String(r.date), plan_workout_id: (r.plan_workout_id as string | null) ?? null,
       name: String(r.name ?? ''), done: Boolean(r.done), duration_min: num(r.duration_min), kcal: num(r.kcal),
-      distance_m: num(r.distance_m), avg_hr: num(r.avg_hr), note: String(r.note ?? ''), source: r.source as never,
+      distance_m: num(r.distance_m), avg_hr: num(r.avg_hr), avg_pace: (r.avg_pace as string | null) ?? null, note: String(r.note ?? ''), source: r.source as never,
       strava_activity_id: num(r.strava_activity_id),
     })),
     extras: (must(extras) as Row[]).map((r) => ({

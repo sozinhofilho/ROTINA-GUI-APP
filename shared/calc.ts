@@ -285,3 +285,10 @@ export function workoutStreak(data: AppData, today: string, maxDays = 366): numb
   }
   return n
 }
+
+/** Pace em min/km ("5:30") a partir de segundos e metros. */
+export function paceFrom(seconds: number, meters: number): string | null {
+  if (!(seconds > 0) || !(meters > 0)) return null
+  const secPerKm = Math.round(seconds / (meters / 1000))
+  return `${Math.floor(secPerKm / 60)}:${String(secPerKm % 60).padStart(2, '0')}`
+}

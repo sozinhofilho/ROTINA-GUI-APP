@@ -3,6 +3,7 @@ import { createHash } from 'node:crypto'
 import { expandDay } from '../../shared/calc.ts'
 import { pickWorkoutForActivity } from '../../shared/logic.ts'
 import type { WorkoutLog } from '../../shared/types.ts'
+import { paceFrom } from '../../shared/calc.ts'
 import { db, env, HttpError, loadData, must } from './server.ts'
 
 const API = 'https://www.strava.com/api/v3'
@@ -153,6 +154,7 @@ export async function importActivity(activityId: number): Promise<{ date: string
     kcal: calories != null ? Math.round(calories) : null,
     distance_m: a.distance ?? null,
     avg_hr: a.average_heartrate ?? null,
+    avg_pace: a.distance > 0 ? paceFrom(a.moving_time || a.elapsed_time, a.distance) : null,
     note: `Strava: ${a.name}`,
     source: 'strava',
     strava_activity_id: a.id,
