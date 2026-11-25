@@ -3,6 +3,9 @@ import { todayISO } from '../shared/dates.ts'
 import { Icon } from './components/ui.tsx'
 import { getToken } from './lib/api.ts'
 import { useStore } from './lib/store.ts'
+import { resetDemo } from './demo.ts'
+
+const DEMO = import.meta.env.MODE === 'demo'
 import { Export } from './screens/Export.tsx'
 import { Plan } from './screens/Plan.tsx'
 import { Summary } from './screens/Summary.tsx'
@@ -65,6 +68,12 @@ export default function App() {
 
   return (
     <>
+      {DEMO && (
+        <div className="demo-bar" role="note">
+          <span>Demonstração com dados de exemplo</span>
+          <button className="link" onClick={resetDemo}>restaurar</button>
+        </div>
+      )}
       <StatusBar />
       <main>
         {tab === 'hoje' && <Today date={date} setDate={setDate} />}

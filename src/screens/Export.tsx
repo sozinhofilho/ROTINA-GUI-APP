@@ -51,6 +51,9 @@ export function Export({ goToDay }: { goToDay: (d: string) => void }) {
         <button className="btn block" onClick={() => void run()} disabled={busy || !from || !to}>
           <Icon name="download" /> {busy ? 'Gerando…' : 'Baixar Excel'}
         </button>
+        {import.meta.env.MODE === 'demo' && (
+          <p className="muted small">Na demonstração o visualizador bloqueia downloads. No app publicado, este botão baixa a planilha.</p>
+        )}
       </div>
 
       <ImportDay goToDay={goToDay} />

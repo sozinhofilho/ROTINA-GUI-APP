@@ -39,6 +39,11 @@ export function bootstrapToken(): string | null {
 
 let memoryToken: string | null = null
 
+/** Usado só pela demonstração, que não tem link secreto. */
+export function setMemoryToken(t: string): void {
+  memoryToken = t
+}
+
 export function getToken(): string | null {
   return memoryToken
 }

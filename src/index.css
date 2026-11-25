@@ -35,7 +35,25 @@
     --danger: #ff7a6e;
     --danger-soft: #3d1d1b;
     --shadow: none;
+    color-scheme: dark;
   }
+}
+:root[data-theme='dark'] {
+  --bg: #0f1720;
+  --surface: #17222c;
+  --surface-2: #1f2c38;
+  --text: #e9eef0;
+  --muted: #93a2ad;
+  --border: #2a3946;
+  --accent: #3ddc97;
+  --accent-ink: #062418;
+  --accent-soft: #163a2c;
+  --warn: #f3b34c;
+  --warn-soft: #3b2c12;
+  --danger: #ff7a6e;
+  --danger-soft: #3d1d1b;
+  --shadow: none;
+  color-scheme: dark;
 }
 
 * { box-sizing: border-box; }
@@ -248,6 +266,11 @@ input:focus, select:focus, textarea:focus, button:focus-visible { outline: 2px s
 }
 .toast.erro { background: var(--danger); color: #fff; }
 .locked { text-align: center; padding-top: 30vh; }
+.demo-bar {
+  display: flex; justify-content: center; align-items: center; gap: 10px; flex-wrap: wrap;
+  padding: 8px max(16px, env(safe-area-inset-left, 0px)); font-size: 0.82rem; font-weight: 600;
+  background: var(--accent-soft); color: var(--text);
+}
 
 @media (max-width: 360px) {
   .grid3, .grid4 { grid-template-columns: 1fr 1fr; }
