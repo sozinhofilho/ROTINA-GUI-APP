@@ -1,0 +1,358 @@
+{
+  "replace": true,
+  "settings": {
+    "calorie_goal": 2500,
+    "tolerance_pct": 10,
+    "base_expenditure": null
+  },
+  "meals": [
+    {
+      "weekdays": "todos",
+      "name": "Café da manhã",
+      "time": "08:30",
+      "description": "Cuscuz com ovos e ricota + mamão com abacate e leite em pó. (08h30–09h00)",
+      "items": [
+        {
+          "food": "Cuscuz",
+          "qty": "120 g",
+          "kcal": 136
+        },
+        {
+          "food": "Ovos inteiros",
+          "qty": "3 un. (150 g)",
+          "kcal": 219
+        },
+        {
+          "food": "Creme de ricota",
+          "qty": "30 g",
+          "kcal": 64
+        },
+        {
+          "food": "Mamão",
+          "qty": "150 g",
+          "kcal": 68
+        },
+        {
+          "food": "Abacate",
+          "qty": "100 g",
+          "kcal": 96
+        },
+        {
+          "food": "Leite em pó integral",
+          "qty": "20 g",
+          "kcal": 99
+        }
+      ],
+      "kcal": 682,
+      "protein": 33,
+      "carbs": 63,
+      "fat": 35
+    },
+    {
+      "weekdays": "todos",
+      "name": "Almoço",
+      "time": "12:00",
+      "description": "Frango, arroz e legumes com azeite. (12h00–13h00)",
+      "items": [
+        {
+          "food": "Peito de frango",
+          "qty": "110 g",
+          "kcal": 175
+        },
+        {
+          "food": "Arroz branco",
+          "qty": "200 g",
+          "kcal": 256
+        },
+        {
+          "food": "Mix de legumes",
+          "qty": "120 g",
+          "kcal": 42
+        },
+        {
+          "food": "Azeite",
+          "qty": "5 g",
+          "kcal": 45
+        }
+      ],
+      "kcal": 518,
+      "protein": 43,
+      "carbs": 64,
+      "fat": 9
+    },
+    {
+      "weekdays": "todos",
+      "name": "Lanche da tarde",
+      "time": "16:00",
+      "description": "Biscoito de arroz com patê de frango e creme de ricota. (16h00–17h00)",
+      "items": [
+        {
+          "food": "Frango desfiado",
+          "qty": "70 g",
+          "kcal": 111
+        },
+        {
+          "food": "Creme de ricota",
+          "qty": "40 g",
+          "kcal": 85
+        },
+        {
+          "food": "Biscoito de arroz",
+          "qty": "30 g",
+          "kcal": 113
+        }
+      ],
+      "kcal": 309,
+      "protein": 28,
+      "carbs": 26,
+      "fat": 9
+    },
+    {
+      "weekdays": "todos",
+      "name": "Jantar",
+      "time": "19:00",
+      "description": "Frango, batata, arroz e legumes com azeite. (19h00–20h00)",
+      "items": [
+        {
+          "food": "Peito de frango",
+          "qty": "90 g",
+          "kcal": 143
+        },
+        {
+          "food": "Batata inglesa",
+          "qty": "300 g",
+          "kcal": 156
+        },
+        {
+          "food": "Arroz branco",
+          "qty": "135 g",
+          "kcal": 173
+        },
+        {
+          "food": "Mix de legumes",
+          "qty": "120 g",
+          "kcal": 42
+        },
+        {
+          "food": "Azeite",
+          "qty": "10 g",
+          "kcal": 90
+        }
+      ],
+      "kcal": 604,
+      "protein": 38,
+      "carbs": 82,
+      "fat": 14
+    },
+    {
+      "weekdays": "todos",
+      "name": "Ceia",
+      "time": "21:30",
+      "description": "Banana quente com leite em pó e mel + proteína de arroz com água. Canela opcional. (21h30–22h00)",
+      "items": [
+        {
+          "food": "Banana",
+          "qty": "120 g",
+          "kcal": 118
+        },
+        {
+          "food": "Leite em pó integral",
+          "qty": "25 g",
+          "kcal": 124
+        },
+        {
+          "food": "Mel",
+          "qty": "10 g",
+          "kcal": 31
+        },
+        {
+          "food": "Rice Protein Growth",
+          "qty": "30 g",
+          "kcal": 115
+        }
+      ],
+      "kcal": 388,
+      "protein": 30,
+      "carbs": 48,
+      "fat": 8
+    }
+  ],
+  "workouts": [
+    {
+      "weekdays": [
+        "seg",
+        "qua",
+        "sex"
+      ],
+      "name": "HYROX",
+      "kind": "hyrox",
+      "details": "Treino HYROX.",
+      "duration_min": 60,
+      "kcal": 700
+    },
+    {
+      "weekdays": "ter",
+      "name": "Upper A",
+      "kind": "strength",
+      "details": "Treino A — Upper Body.",
+      "exercises": [
+        {
+          "name": "Supino inclinado com halteres",
+          "sets": "3",
+          "reps": "6–10"
+        },
+        {
+          "name": "Voador",
+          "sets": "2",
+          "reps": "8–12"
+        },
+        {
+          "name": "Remada alta máquina",
+          "sets": "3",
+          "reps": "6–10"
+        },
+        {
+          "name": "Puxada neutra na polia",
+          "sets": "2",
+          "reps": "6–10"
+        },
+        {
+          "name": "Desenvolvimento máquina",
+          "sets": "2",
+          "reps": "6–10"
+        },
+        {
+          "name": "Elevação lateral com halteres",
+          "sets": "2",
+          "reps": "10–15"
+        },
+        {
+          "name": "Tríceps francês na polia com corda",
+          "sets": "2",
+          "reps": "8–12"
+        },
+        {
+          "name": "Rosca direta barra W",
+          "sets": "2",
+          "reps": "8–12"
+        }
+      ],
+      "duration_min": 60,
+      "kcal": 300
+    },
+    {
+      "weekdays": "dom",
+      "name": "Upper C",
+      "kind": "strength",
+      "details": "Treino C — Upper Body.",
+      "exercises": [
+        {
+          "name": "Puxada romana",
+          "sets": "3",
+          "reps": "6–10"
+        },
+        {
+          "name": "Remada baixa pronada",
+          "sets": "3",
+          "reps": "6–10"
+        },
+        {
+          "name": "Supino reto com halteres",
+          "sets": "3",
+          "reps": "6–10"
+        },
+        {
+          "name": "Cross over polia alta",
+          "sets": "2",
+          "reps": "8–12"
+        },
+        {
+          "name": "Elevação lateral máquina",
+          "sets": "2",
+          "reps": "10–15"
+        },
+        {
+          "name": "Voador inverso",
+          "sets": "2",
+          "reps": "10–15"
+        },
+        {
+          "name": "Rosca martelo com halteres",
+          "sets": "2",
+          "reps": "8–12"
+        },
+        {
+          "name": "Tríceps na polia com barra",
+          "sets": "2",
+          "reps": "8–12"
+        }
+      ],
+      "duration_min": 60,
+      "kcal": 300
+    },
+    {
+      "weekdays": [
+        "ter",
+        "dom"
+      ],
+      "name": "Corrida leve 6 km",
+      "kind": "run",
+      "details": "Corrida leve, ritmo confortável, 6 km.",
+      "duration_min": 40,
+      "kcal": 450
+    },
+    {
+      "weekdays": "qui",
+      "name": "Corrida intervalada (tiros)",
+      "kind": "run",
+      "details": "Corrida intervalada com tiros.",
+      "duration_min": 50,
+      "kcal": 550
+    },
+    {
+      "weekdays": "sab",
+      "name": "Lower B",
+      "kind": "strength",
+      "details": "Treino B — Lower Body.",
+      "exercises": [
+        {
+          "name": "RDL com barra",
+          "sets": "2",
+          "reps": "6–8"
+        },
+        {
+          "name": "Agachamento búlgaro",
+          "sets": "2",
+          "reps": "6–10"
+        },
+        {
+          "name": "Cadeira flexora",
+          "sets": "2",
+          "reps": "8–12"
+        },
+        {
+          "name": "Agachamento Hack",
+          "sets": "2",
+          "reps": "6–10"
+        },
+        {
+          "name": "Cadeira abdutora",
+          "sets": "2",
+          "reps": "12–15"
+        },
+        {
+          "name": "Panturrilha em pé",
+          "sets": "2",
+          "reps": "8–12"
+        },
+        {
+          "name": "Panturrilha sentada",
+          "sets": "2",
+          "reps": "10–15"
+        }
+      ],
+      "duration_min": 55,
+      "kcal": 350
+    }
+  ]
+}
