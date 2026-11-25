@@ -32,6 +32,8 @@ export function memoryStore(initial: AppData): Store & { data: AppData; writes: 
         meal_logs: d.meal_logs.filter((l) => inRange(l.date)),
         workout_logs: d.workout_logs.filter((l) => inRange(l.date)),
         extras: d.extras.filter((e) => inRange(e.date)),
+        water: (d.water ?? []).filter((w) => inRange(w.date)),
+        body: (d.body ?? []).filter((b) => inRange(b.date)),
       })
     },
     async apply(ops: Op[]): Promise<void> {

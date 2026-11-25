@@ -2,10 +2,11 @@
 // expandDay/summarize (cálculos do app), importDayToOps/diffPlan (importação do app)
 // e as mesmas operações (Op) que o app grava. Cada função devolve { text, data }.
 import { currentStreak, expandDay, mealKcal, summarize, workoutKcal, type DayView } from '../../shared/calc.ts'
-import { addDays, diffDays, formatBR, formatDayLabel, todayISO, weekdayOf, WEEKDAY_SHORT } from '../../shared/dates.ts'
+import { addDays, diffDays, formatBR, formatDayLabel, monthEnd, monthStart, todayISO, weekdayOf, WEEKDAY_SHORT, weekStart } from '../../shared/dates.ts'
 import { stableId } from '../../shared/ids.ts'
 import { applyOp, extraId, importDayToOps, PlanError, pruneNoops, sameName } from '../../shared/logic.ts'
 import { diffPlan, formatWeekdays } from '../../shared/plan.ts'
+import { review, reviewText, weeklySeries } from '../../shared/review.ts'
 import {
   formatZodError,
   ImportDaySchema,
@@ -62,6 +63,10 @@ function dayData(view: DayView) {
       meals_total: s.mealsTotal,
       workouts_done: s.workoutsDone,
       workouts_planned: s.workoutsPlanned,
+      water_ml: s.waterMl,
+      water_goal_ml: s.waterGoal,
+      water_ok: s.waterOk,
+      weight_kg: s.weightKg,
     },
     meals: view.meals.map((m) => ({
       meal_id: m.plan?.id ?? null,
@@ -111,6 +116,7 @@ function dayText(view: DayView): string {
   ]
   for (const m of view.movedAway) lines.push(`${m.plan.name} foi movido para ${formatBR(m.override.to_date)}.`)
   if (view.extras.length) lines.push(`Extras: ${view.extras.map((e) => `${e.description} ${e.kcal} kcal`).join(' · ')}.`)
+  lines.push(`Água: ${(s.waterMl / 1000).toLocaleString('pt-BR')} de ${(s.waterGoal / 1000).toLocaleString('pt-BR')} L${s.waterOk ? ' ✓' : ''}.${s.weightKg != null ? ` Peso: ${s.weightKg.toLocaleString('pt-BR')} kg.` : ''}`)
   return lines.join('\n')
 }
 
@@ -521,5 +527,82 @@ export async function getExport(ctx: ToolContext, a: { from: string; to: string;
   return {
     text: `Link para baixar o ${format.toUpperCase()} de ${formatBR(a.from)} a ${formatBR(a.to)} (válido até ${link.expires_at}):\n${link.url}`,
     data: { url: link.url, expires_at: link.expires_at, format },
+  }
+}
+
+// ---------------- peso, água e fechamento ----------------
+
+export async function logWeight(ctx: ToolContext, a: { date?: string; weight_kg: number; note?: string }): Promise<ToolResult> {
+  const date = a.date ?? today(ctx)
+  const data = await ctx.store.load(addDays(date, -14), date)
+  const existing = (data.body ?? []).find((b) => b.date === date)
+  const row = {
+    id: existing?.id ?? stableId('body', date),
+    date,
+    weight_kg: Math.round(a.weight_kg * 10) / 10,
+    photo_front: existing?.photo_front ?? null,
+    photo_side: existing?.photo_side ?? null,
+    note: a.note ?? existing?.note ?? '',
+  }
+  const { applied } = await commit(ctx, data, [{ t: 'body.upsert', row }])
+  const prev = (data.body ?? []).filter((b) => b.date < date && b.weight_kg != null).sort((x, y) => y.date.localeCompare(x.date))[0]
+  const delta = prev?.weight_kg != null ? Math.round((row.weight_kg - prev.weight_kg) * 10) / 10 : null
+  const wd = weekdayOf(date)
+  const hint = wd === 1 || wd === 5 ? '' : ' (o combinado é pesar na segunda e na sexta)'
+  const vs = delta != null ? ` ${delta > 0 ? '+' : delta < 0 ? '−' : ''}${Math.abs(delta).toLocaleString('pt-BR')} kg vs ${formatBR(prev!.date)}.` : ''
+  return {
+    text: `${applied.length ? 'Peso registrado' : 'Sem mudança, já estava registrado'}: ${row.weight_kg.toLocaleString('pt-BR')} kg em ${formatDayLabel(date)}${hint}.${vs} As fotos são enviadas pelo app.`,
+    data: { changed: applied.length > 0, date, weight_kg: row.weight_kg, previous: prev ? { date: prev.date, weight_kg: prev.weight_kg } : null, delta_kg: delta },
+  }
+}
+
+export async function addWater(ctx: ToolContext, a: { date?: string; add_ml?: number; total_ml?: number }): Promise<ToolResult> {
+  if (a.add_ml == null && a.total_ml == null) throw new ToolError('Informe add_ml (somar ao dia) ou total_ml (total do dia).')
+  const date = a.date ?? today(ctx)
+  const data = await ctx.store.load(date, date)
+  const current = (data.water ?? []).find((w) => w.date === date)?.ml ?? 0
+  const ml = Math.max(0, Math.min(20000, a.total_ml ?? current + (a.add_ml ?? 0)))
+  const { applied, after } = await commit(ctx, data, [{ t: 'water.set', row: { date, ml } }])
+  const s = expandDay(date, after).stats
+  const L = (v: number) => (v / 1000).toLocaleString('pt-BR', { maximumFractionDigits: 2 })
+  return {
+    text: `${applied.length ? 'Água atualizada' : 'Sem mudança'}: ${L(ml)} de ${L(s.waterGoal)} L em ${formatBR(date)}${s.waterOk ? ' ✓ meta batida' : `, faltam ${L(s.waterGoal - ml)} L`}.`,
+    data: { changed: applied.length > 0, date, water_ml: ml, water_goal_ml: s.waterGoal, water_ok: s.waterOk },
+  }
+}
+
+export async function getReview(ctx: ToolContext, a: { period: 'week' | 'month' | 'all'; date?: string }): Promise<ToolResult> {
+  const t = today(ctx)
+  const ref = a.date ?? t
+  let from: string
+  let to: string
+  if (a.period === 'week') {
+    from = weekStart(ref)
+    to = addDays(from, 6)
+  } else if (a.period === 'month') {
+    from = monthStart(ref)
+    to = monthEnd(ref)
+  } else {
+    // Acumulado: desde o primeiro registro (no máximo 2 anos).
+    const all = await ctx.store.load(addDays(t, -730), t)
+    const dates = [...all.meal_logs, ...all.workout_logs, ...all.extras, ...(all.water ?? []), ...(all.body ?? [])].map((x) => x.date).sort()
+    from = weekStart(dates[0] ?? t)
+    to = t
+  }
+  const data = await ctx.store.load(addDays(from, -7), to > t ? to : t)
+  const unit = a.period === 'week' ? 'Semana' : a.period === 'month' ? 'Mês' : 'Período'
+  const r = review(from, to, data, t, unit)
+  const weeks = a.period === 'week' ? [] : weeklySeries(from, to, data, t)
+  const title = a.period === 'week' ? `Semana ${formatBR(from)} a ${formatBR(to)}` : a.period === 'month' ? `Mês ${from.slice(5, 7)}/${from.slice(0, 4)}` : `Acumulado desde ${formatBR(from)}`
+  return {
+    text: reviewText(r, title),
+    data: {
+      from, to, days: r.days, score: r.score, verdict: r.verdict,
+      pillars: r.pillars, avg_kcal_in: r.avgKcalIn, goal: r.goal, days_above: r.daysAbove, days_below: r.daysBelow,
+      extras_kcal: r.extrasKcal, alcohol_kcal: r.alcoholKcal, avg_water_ml: r.avgWaterMl,
+      weights: r.weights, weight_delta_kg: r.weightDelta, weight_changes: r.weightChanges,
+      wins: r.wins, misses: r.misses,
+      weeks: weeks.map((w) => ({ week_start: w.weekStart, score: w.score, days_in_goal: w.daysInGoal, days: w.days, avg_kcal_in: w.avgKcalIn, weight_kg: w.weightKg })),
+    },
   }
 }

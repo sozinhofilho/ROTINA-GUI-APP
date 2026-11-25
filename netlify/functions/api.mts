@@ -23,6 +23,7 @@ import {
   env,
   PHOTO_BUCKET,
   readJson,
+  firstDate,
 } from '../lib/server.ts'
 import {
   authorizeUrl,
@@ -56,13 +57,17 @@ const getData: Handler = async (_req, url) => {
   const { from, to } = parseRange(url)
   const data = await loadData(from, to)
   const photo_urls: Record<string, string> = {}
-  const paths = url.searchParams.get('photos') === '0' ? [] : data.meal_logs.map((l) => l.photo_path).filter((p): p is string => !!p)
+  const wantPhotos = url.searchParams.get('photos') !== '0'
+  const paths = wantPhotos
+    ? [...data.body.flatMap((b) => [b.photo_front, b.photo_side]), ...data.meal_logs.map((l) => l.photo_path)].filter((p): p is string => !!p)
+    : []
   if (paths.length) {
-    const signed = await db().storage.from(PHOTO_BUCKET).createSignedUrls(paths.slice(0, 200), 60 * 60 * 12)
+    const signed = await db().storage.from(PHOTO_BUCKET).createSignedUrls(paths.slice(0, 500), 60 * 60 * 12)
     for (const s of signed.data ?? []) if (s.path && s.signedUrl) photo_urls[s.path] = s.signedUrl
   }
   const body: DataResponse = {
     ...data,
+    first_date: await firstDate().catch(() => null),
     photo_urls,
     features: {
       photo_ai: photoAiEnabled(),

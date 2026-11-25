@@ -186,6 +186,38 @@ export function buildServer(ctx: ToolContext): McpServer {
     annotations: { ...write, destructiveHint: true },
   }, wrap('import_json', ctx, tools.importJson))
 
+  server.registerTool('log_weight', {
+    title: 'Registrar peso',
+    description: 'Registra o peso em jejum do dia (combinado: segunda e sexta). Repetir com o mesmo valor não duplica. Fotos de evolução são enviadas pelo app.',
+    inputSchema: {
+      date: optDate,
+      weight_kg: z.number().min(20).max(400).describe('Peso em kg, ex.: 84.5'),
+      note: z.string().max(4000).optional(),
+    },
+    annotations: write,
+  }, wrap('log_weight', ctx, tools.logWeight))
+
+  server.registerTool('add_water', {
+    title: 'Registrar água',
+    description: 'Registra a água do dia (meta padrão 5 L). Use total_ml quando o usuário disser o total do dia (idempotente) ou add_ml para somar um copo/garrafa ("tomei mais 1 litro": add_ml=1000; cada chamada soma).',
+    inputSchema: {
+      date: optDate,
+      add_ml: z.number().int().min(-5000).max(10000).optional().describe('Quantidade a somar (negativo corrige para menos)'),
+      total_ml: z.number().int().min(0).max(20000).optional().describe('Total do dia em ml'),
+    },
+    annotations: { ...write, idempotentHint: false },
+  }, wrap('add_water', ctx, tools.addWater))
+
+  server.registerTool('get_review', {
+    title: 'Fechamento do período',
+    description: 'Fechamento da semana, do mês ou acumulado: nota de assertividade (média de calorias na meta, refeições, treinos e água), o que funcionou, onde falhou, extras, evolução do peso (fim de semana e segunda a sexta) e nota por semana.',
+    inputSchema: {
+      period: z.enum(['week', 'month', 'all']).describe('week = semana (seg a dom), month = mês, all = acumulado desde o início'),
+      date: optDate.describe('Uma data dentro do período desejado; se omitida, o período atual'),
+    },
+    annotations: ro,
+  }, wrap('get_review', ctx, tools.getReview))
+
   server.registerTool('get_export', {
     title: 'Exportar período',
     description: 'Gera um link temporário (1 hora) e assinado para baixar a planilha do período: xlsx (5 abas) ou csv.',

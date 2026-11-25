@@ -10,7 +10,7 @@ import { DEFAULT_SETTINGS } from '../shared/types.ts'
 function seedData(): AppData {
   const plan = ImportPlanSchema.parse(JSON.parse(readFileSync('supabase/seed-plan.json', 'utf8')))
   const { meals, workouts } = importPlanToRows(plan)
-  return { settings: { ...DEFAULT_SETTINGS }, plan_meals: meals, plan_workouts: workouts, overrides: [], meal_logs: [], workout_logs: [], extras: [] }
+  return { settings: { ...DEFAULT_SETTINGS }, plan_meals: meals, plan_workouts: workouts, overrides: [], meal_logs: [], workout_logs: [], extras: [], water: [], body: [] }
 }
 
 const WED = '2026-11-25' // quarta

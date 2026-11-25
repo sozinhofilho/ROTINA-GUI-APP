@@ -85,6 +85,17 @@ export function applyOp(data: AppData, op: Op): AppData {
       }
     case 'settings.update':
       return { ...data, settings: { ...data.settings, ...op.row } }
+    case 'water.set': {
+      const rest = (data.water ?? []).filter((w) => w.date !== op.row.date)
+      return { ...data, water: op.row.ml > 0 ? [...rest, op.row] : rest }
+    }
+    case 'body.upsert': {
+      const r = op.row
+      const rest = (data.body ?? []).filter((b) => b.id !== r.id && b.date !== r.date)
+      return { ...data, body: [...rest, r] }
+    }
+    case 'body.delete':
+      return { ...data, body: (data.body ?? []).filter((b) => b.id !== op.id) }
   }
 }
 
@@ -260,6 +271,14 @@ export function isNoop(op: Op, data: AppData): boolean {
       const s = data.settings as unknown as Record<string, unknown>
       return Object.entries(op.row).every(([k, v]) => s[k] === v)
     }
+    case 'water.set':
+      return ((data.water ?? []).find((w) => w.date === op.row.date)?.ml ?? 0) === op.row.ml
+    case 'body.upsert': {
+      const ex = (data.body ?? []).find((b) => b.id === op.row.id || b.date === op.row.date)
+      return !!ex && sameRow(op.row, ex)
+    }
+    case 'body.delete':
+      return !(data.body ?? []).some((b) => b.id === op.id)
     case 'meal_log.delete':
       return !data.meal_logs.some((x) => x.id === op.id)
     case 'workout_log.delete':

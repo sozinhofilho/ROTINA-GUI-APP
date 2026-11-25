@@ -24,7 +24,7 @@ const seedPlan = JSON.parse(readFileSync('supabase/seed-plan.json', 'utf8'))
 
 function seed(): AppData {
   const { meals, workouts } = importPlanToRows(ImportPlanSchema.parse(seedPlan))
-  return { settings: { ...DEFAULT_SETTINGS }, plan_meals: meals, plan_workouts: workouts, overrides: [], meal_logs: [], workout_logs: [], extras: [] }
+  return { settings: { ...DEFAULT_SETTINGS }, plan_meals: meals, plan_workouts: workouts, overrides: [], meal_logs: [], workout_logs: [], extras: [], water: [], body: [] }
 }
 
 let store: ReturnType<typeof memoryStore>
@@ -98,10 +98,10 @@ describe('autenticação', () => {
     }
     await expect(client('token-errado')).rejects.toThrow()
   })
-  it('token certo: lista as 11 ferramentas', async () => {
+  it('token certo: lista as 14 ferramentas', async () => {
     const c = await client()
     const names = (await c.listTools()).tools.map((t) => t.name).sort()
-    expect(names).toEqual(['add_extra', 'get_day', 'get_export', 'get_plan', 'get_range', 'import_json', 'log_workout', 'move_workout', 'remove_entry', 'set_meal_done', 'update_plan'])
+    expect(names).toEqual(['add_extra', 'add_water', 'get_day', 'get_export', 'get_plan', 'get_range', 'get_review', 'import_json', 'log_weight', 'log_workout', 'move_workout', 'remove_entry', 'set_meal_done', 'update_plan'])
   })
   it('GET (stream SSE) não é suportado em modo stateless: 405', async () => {
     expect((await rpc(null, { authorization: `Bearer ${TOKEN}` }, '/mcp', 'GET')).status).toBe(405)
@@ -415,7 +415,7 @@ describe('arquivo de exportação (mesma planilha do app)', () => {
     await call(c, 'add_extra', { date: WED, description: '2 cervejas', kcal: 300 })
     const sheets = buildExportSheets(store.data, '2026-11-23', WED, WED)
     const buf = XLSX.write(buildWorkbook(XLSX, sheets) as never, { type: 'buffer', bookType: 'xlsx' }) as Buffer
-    expect(XLSX.read(buf).SheetNames).toEqual(['Resumo diário', 'Refeições', 'Treinos', 'Extras', 'Resumo semanal'])
+    expect(XLSX.read(buf).SheetNames).toEqual(['Resumo diário', 'Refeições', 'Treinos', 'Extras', 'Resumo semanal', 'Peso'])
     const csv = buildCsv(XLSX, sheets)
     expect(csv).toContain('# Extras')
     expect(csv).toContain('2 cervejas;Outro;300'.replace('Outro', 'Álcool'))
@@ -433,5 +433,74 @@ describe('update_plan parcial', () => {
     const bad = await call(c, 'update_plan', { plan_json: { replace: false, meals: [{ name: 'Brunch' }] } })
     expect(bad.isError).toBe(true)
     expect(bad.content[0].text).toMatch(/informe time e kcal/)
+  })
+})
+
+describe('log_weight', () => {
+  it('registra, compara com o anterior e não duplica', async () => {
+    const c = await client()
+    await call(c, 'log_weight', { date: '2026-11-20', weight_kg: 84.0 }) // sexta
+    const r = await call(c, 'log_weight', { date: '2026-11-23', weight_kg: 84.8 }) // segunda
+    expect(r.content[0].text).toMatch(/84,8 kg.*\+0,8 kg vs 20\/11\/2026/)
+    await call(c, 'log_weight', { date: '2026-11-23', weight_kg: 84.8 })
+    expect(store.data.body).toHaveLength(2)
+    expect(expandDay('2026-11-23', store.data).stats.weightKg).toBe(84.8)
+    const other = await call(c, 'log_weight', { date: WED, weight_kg: 84.5 })
+    expect(other.content[0].text).toMatch(/segunda e na sexta/)
+  })
+  it('valida', async () => {
+    await expectInvalid(await client(), 'log_weight', { date: WED, weight_kg: 5 })
+  })
+})
+
+describe('add_water', () => {
+  it('soma com add_ml e fixa com total_ml (idempotente)', async () => {
+    const c = await client()
+    await call(c, 'add_water', { date: WED, add_ml: 1000 })
+    await call(c, 'add_water', { date: WED, add_ml: 500 })
+    expect(expandDay(WED, store.data).stats.waterMl).toBe(1500)
+    const r = await call(c, 'add_water', { date: WED, total_ml: 5000 })
+    expect(r.content[0].text).toMatch(/meta batida/)
+    const w = store.writes
+    await call(c, 'add_water', { date: WED, total_ml: 5000 })
+    expect(store.writes).toBe(w)
+    expect(expandDay(WED, store.data).stats.waterOk).toBe(true)
+  })
+  it('erro claro sem quantidade e validação', async () => {
+    const c = await client()
+    expect((await call(c, 'add_water', { date: WED })).isError).toBe(true)
+    await expectInvalid(c, 'add_water', { date: WED, total_ml: -1 })
+  })
+})
+
+describe('get_review', () => {
+  it('fechamento da semana com nota, acertos, falhas e efeito do fim de semana', async () => {
+    const c = await client()
+    const all = ['Café da manhã', 'Almoço', 'Lanche da tarde', 'Jantar', 'Ceia'].map((name) => ({ name }))
+    await call(c, 'import_json', { payload: { date: '2026-11-23', meals: all, workouts: [{ name: 'HYROX', duration_min: 60 }] }, confirm: true })
+    await call(c, 'import_json', { payload: { date: '2026-11-24', meals: all.slice(0, 4), extras: [{ description: '3 cervejas', kcal: 450, category: 'alcool' }] }, confirm: true })
+    await call(c, 'add_water', { date: '2026-11-23', total_ml: 5000 })
+    await call(c, 'log_weight', { date: '2026-11-20', weight_kg: 84.0 })
+    await call(c, 'log_weight', { date: '2026-11-23', weight_kg: 84.8 })
+    const r = await call(c, 'get_review', { period: 'week', date: '2026-11-24' })
+    const d = r.structuredContent as { score: number; pillars: { key: string; done: number; total: number }[]; wins: string[]; misses: string[]; alcohol_kcal: number }
+    // 3 dias contados (seg, ter, qua=hoje). Ter: 2.113 + 450 de cerveja = 2.563, dentro da faixa 2.250–2.750
+    expect(d.pillars.map((p) => [p.key, p.done, p.total])).toEqual([['kcal', 2, 3], ['meals', 9, 15], ['workouts', 1, 4], ['water', 1, 3]])
+    expect(d.score).toBe(Math.round((67 + 60 + 25 + 33) / 4))
+    expect(d.alcohol_kcal).toBe(450)
+    expect(d.misses.join(' ')).toMatch(/Fim de semana: \+0,8 kg/)
+    expect(d.misses.join(' ')).toMatch(/Upper A \(Ter 24\/11\)/)
+    expect(r.content[0].text).toMatch(/assertividade \d+%/)
+  })
+  it('mês e acumulado trazem a nota por semana', async () => {
+    const c = await client()
+    await call(c, 'set_meal_done', { date: '2026-11-03', meal_id: 'almoço', done: true })
+    const m = await call(c, 'get_review', { period: 'month', date: WED })
+    expect((m.structuredContent as { weeks: unknown[] }).weeks.length).toBe(5)
+    const a = await call(c, 'get_review', { period: 'all' })
+    expect((a.structuredContent as { from: string }).from).toBe('2026-11-02')
+  })
+  it('valida', async () => {
+    await expectInvalid(await client(), 'get_review', { period: 'ano' })
   })
 })

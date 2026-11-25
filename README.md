@@ -29,6 +29,18 @@ App pessoal (PWA) para acompanhar dieta e treinos todo dia, pelo celular, sem lo
 
 Desenvolvimento: `npm install`, `npm run check` (lint, tipos, testes e build). Para rodar com as Functions localmente: `npx netlify dev` com um `.env`.
 
+## Peso, fotos e água
+
+* **Peso e fotos:** na segunda e na sexta a tela Hoje mostra o cartão "Peso e fotos" (peso em jejum, foto de frente e de lado). As fotos ficam no bucket privado do Supabase.
+* **Evolução:** gráfico do peso, efeito médio do fim de semana (sexta → segunda) e comparação de fotos antes e depois, de frente ou de lado.
+* **Água:** botões +500 ml e +1 L; meta padrão de 5 L, ajustável no Plano.
+
+## Fechamento (semana, mês e acumulado)
+
+* **Assertividade** = média de 4 pilares no período: dias com calorias na meta, refeições feitas, treinos previstos feitos e dias com a meta de água. Dias futuros não contam.
+* **O que funcionou / onde falhou** é gerado a partir dos dados: dias acima ou abaixo da meta, refeição mais pulada, treinos não feitos, água, extras e álcool, peso no fim de semana e de segunda a sexta.
+* Mês e acumulado mostram a nota de cada semana. A mesma análise está no conector do Claude (`get_review`) e no Excel (aba Resumo semanal e aba Peso).
+
 ## Regras de cálculo
 
 * **Ingerido** = refeições marcadas (calorias reais se preenchidas, senão as previstas) + extras.
@@ -143,6 +155,9 @@ Para trocar o token depois: remova o conector e cadastre de novo (headers não p
 | `update_plan(plan_json, confirm=false)` | prévia das diferenças; grava só com `confirm=true` |
 | `import_json(payload, confirm=false)` | lançamentos do dia (ou plano) com prévia e merge idempotente |
 | `get_export(from, to, format)` | link de 1 hora, assinado, para baixar o .xlsx ou .csv |
+| `log_weight(date, weight_kg, note?)` | peso em jejum (segunda e sexta); fotos são pelo app |
+| `add_water(date, add_ml? , total_ml?)` | água do dia: `add_ml` soma, `total_ml` fixa o total |
+| `get_review(period, date?)` | fechamento da semana, do mês ou acumulado: nota, o que funcionou, onde falhou, peso |
 
 Todas as escritas são idempotentes: repetir a mesma frase não duplica nada. `date` omitido = hoje (America/Sao_Paulo).
 
@@ -162,6 +177,10 @@ Todas as escritas são idempotentes: repetir a mesma frase não duplica nada. `d
 | "como foi minha semana?" | `get_range(segunda, domingo)` |
 | "qual meu treino de quinta?" | `get_plan()` |
 | "muda a ceia para 22h" | `update_plan(…)` mostra a prévia → você confirma → `confirm: true` |
+| "pesei 84,3 hoje" | `log_weight(weight_kg: 84.3)` |
+| "tomei mais um litro de água" | `add_water(add_ml: 1000)` |
+| "como fechou minha semana?" | `get_review(period: "week")` |
+| "e o mês? e desde o começo?" | `get_review(period: "month")` / `get_review(period: "all")` |
 | "me manda a planilha de novembro" | `get_export(from: "2026-11-01", to: "2026-11-30", format: "xlsx")` |
 
 ### Segurança

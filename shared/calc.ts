@@ -3,6 +3,7 @@ import type {
   AppData,
   DayOverride,
   ExtraEntry,
+  BodyCheckin,
   MealLog,
   PlanMeal,
   PlanWorkout,
@@ -49,6 +50,10 @@ export interface DayStats {
   proteinDone: number
   proteinPlanned: number
   hasRecord: boolean
+  waterMl: number
+  waterGoal: number
+  waterOk: boolean
+  weightKg: number | null
 }
 
 export interface DayView {
@@ -58,6 +63,7 @@ export interface DayView {
   extras: ExtraEntry[]
   /** Treinos do plano base deste dia que foram movidos para outra data. */
   movedAway: { plan: PlanWorkout; override: DayOverride }[]
+  body: BodyCheckin | null
   stats: DayStats
 }
 
@@ -126,7 +132,12 @@ export function expandDay(date: string, data: AppData): DayView {
     .filter((e) => e.date === date)
     .sort((a, b) => byTime(a.time, b.time))
 
-  return { date, meals, workouts, extras, movedAway, stats: computeStats(date, meals, workouts, extras, data.settings) }
+  const waterMl = (data.water ?? []).find((w) => w.date === date)?.ml ?? 0
+  const body = (data.body ?? []).find((b) => b.date === date) ?? null
+  return {
+    date, meals, workouts, extras, movedAway, body,
+    stats: computeStats(date, meals, workouts, extras, data.settings, waterMl, body?.weight_kg ?? null),
+  }
 }
 
 export function computeStats(
@@ -135,6 +146,8 @@ export function computeStats(
   workouts: DayWorkout[],
   extras: ExtraEntry[],
   settings: Settings,
+  waterMl = 0,
+  weightKg: number | null = null,
 ): DayStats {
   const goal = settings.calorie_goal
   const tolerance = Math.round((goal * settings.tolerance_pct) / 100)
@@ -187,6 +200,10 @@ export function computeStats(
     proteinDone,
     proteinPlanned,
     hasRecord,
+    waterMl,
+    waterGoal: settings.water_goal_ml ?? 5000,
+    waterOk: waterMl >= (settings.water_goal_ml ?? 5000),
+    weightKg,
   }
 }
 

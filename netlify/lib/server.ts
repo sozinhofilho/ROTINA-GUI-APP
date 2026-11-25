@@ -64,13 +64,14 @@ export async function loadSettings(): Promise<Settings> {
     tolerance_pct: Number(row.tolerance_pct),
     base_expenditure: num(row.base_expenditure),
     timezone: String(row.timezone || DEFAULT_SETTINGS.timezone),
+    water_goal_ml: row.water_goal_ml == null ? DEFAULT_SETTINGS.water_goal_ml : Number(row.water_goal_ml),
   }
 }
 
 /** Carrega plano + registros entre from e to (inclusive). Postgres devolve numeric como string: normaliza. */
 export async function loadData(from: string, to: string): Promise<AppData> {
   const s = db()
-  const [settings, meals, workouts, overrides, mealLogs, workoutLogs, extras] = await Promise.all([
+  const [settings, meals, workouts, overrides, mealLogs, workoutLogs, extras, water, body] = await Promise.all([
     loadSettings(),
     s.from('plan_meals').select('*').order('weekday').order('time'),
     s.from('plan_workouts').select('*').order('weekday').order('sort'),
@@ -78,6 +79,8 @@ export async function loadData(from: string, to: string): Promise<AppData> {
     s.from('meal_logs').select('*').gte('date', from).lte('date', to),
     s.from('workout_logs').select('*').gte('date', from).lte('date', to),
     s.from('extra_entries').select('*').gte('date', from).lte('date', to),
+    s.from('water_logs').select('date, ml').gte('date', from).lte('date', to),
+    s.from('body_checkins').select('*').gte('date', from).lte('date', to),
   ])
   type Row = Record<string, unknown>
   return {
@@ -111,6 +114,12 @@ export async function loadData(from: string, to: string): Promise<AppData> {
       id: String(r.id), date: String(r.date), time: (r.time as string | null) ?? null,
       description: String(r.description), kcal: Number(r.kcal), category: r.category as never,
     })),
+    water: (must(water) as Row[]).map((r) => ({ date: String(r.date), ml: Number(r.ml) })),
+    body: (must(body) as Row[]).map((r) => ({
+      id: String(r.id), date: String(r.date), weight_kg: num(r.weight_kg),
+      photo_front: (r.photo_front as string | null) ?? null, photo_side: (r.photo_side as string | null) ?? null,
+      note: String(r.note ?? ''),
+    })),
   }
 }
 
@@ -120,4 +129,16 @@ export async function readJson(req: Request): Promise<unknown> {
   } catch {
     throw new HttpError(400, 'JSON inválido')
   }
+}
+
+/** Primeira data com qualquer registro (para a visão acumulada). */
+export async function firstDate(): Promise<string | null> {
+  const s = db()
+  const results = await Promise.all(
+    ['meal_logs', 'workout_logs', 'extra_entries', 'water_logs', 'body_checkins'].map((t) =>
+      s.from(t).select('date').order('date', { ascending: true }).limit(1),
+    ),
+  )
+  const dates = results.flatMap((r) => (r.data as { date: string }[] | null) ?? []).map((r) => String(r.date))
+  return dates.length ? dates.sort()[0] : null
 }

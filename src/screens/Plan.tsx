@@ -143,7 +143,7 @@ function SettingsCard({ settings }: { settings: Settings }) {
   const update = (row: Partial<Settings>) => dispatch({ t: 'settings.update', row })
   return (
     <div className="card settings">
-      <div className="grid3">
+      <div className="grid4 settings-grid">
         <Field label="Meta (kcal)">
           {(id) => (
             <LazyInput id={id} inputMode="numeric" value={String(settings.calorie_goal)}
@@ -166,6 +166,15 @@ function SettingsCard({ settings }: { settings: Settings }) {
           {(id) => (
             <LazyInput id={id} inputMode="numeric" value={settings.base_expenditure?.toString() ?? ''} placeholder="opcional"
               onCommit={(v) => update({ base_expenditure: toIntOrNull(v) })} />
+          )}
+        </Field>
+        <Field label="Água (L)">
+          {(id) => (
+            <LazyInput id={id} inputMode="decimal" value={String((settings.water_goal_ml ?? 5000) / 1000).replace('.', ',')}
+              onCommit={(v) => {
+                const l = Number(v.replace(',', '.'))
+                if (Number.isFinite(l) && l >= 0 && l <= 15) update({ water_goal_ml: Math.round(l * 1000) })
+              }} />
           )}
         </Field>
       </div>

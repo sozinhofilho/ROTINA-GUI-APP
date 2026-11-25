@@ -1,6 +1,7 @@
 // Monta as abas da planilha de exportação (usado pelo app e pelo link do MCP).
 import { expandDay, mealKcal, summarize, workoutKcal } from './calc.ts'
 import { addDays, dateRange, formatBR, weekStart } from './dates.ts'
+import { review } from './review.ts'
 import type { AppData } from './types.ts'
 
 const STATUS: Record<string, string> = { vazio: 'Sem registro', abaixo: 'Abaixo', dentro: 'Dentro', acima: 'Acima' }
@@ -50,6 +51,9 @@ export function buildExportSheets(data: AppData, from: string, to: string, today
       'Gasto base': s.base ?? '',
       'Gasto total': s.spent,
       Saldo: s.balance ?? '',
+      'Água (L)': s.waterMl / 1000,
+      'Meta de água': s.waterOk ? 'Sim' : 'Não',
+      'Peso (kg)': s.weightKg ?? '',
     }
   })
 
@@ -102,8 +106,12 @@ export function buildExportSheets(data: AppData, from: string, to: string, today
   if (days.length) {
     for (let ws = weekStart(days[0]); ws <= end; ws = addDays(ws, 7)) {
       const s = summarize(ws < from ? from : ws, addDays(ws, 6), data, end)
+      const rv = review(ws < from ? from : ws, addDays(ws, 6), data, end)
       weekly.push({
         'Semana (seg)': formatBR(ws),
+        'Assertividade (%)': rv.score ?? '',
+        'Dias com meta de água': rv.pillars[3].done,
+        'Peso no fim da semana (kg)': rv.weights.length ? rv.weights[rv.weights.length - 1].kg : '',
         Dias: s.days,
         'Dias com registro': s.daysWithRecord,
         'Dias na meta': s.daysInGoal,
@@ -123,6 +131,13 @@ export function buildExportSheets(data: AppData, from: string, to: string, today
     { name: 'Treinos', rows: workouts },
     { name: 'Extras', rows: extras },
     { name: 'Resumo semanal', rows: weekly },
+    {
+      name: 'Peso',
+      rows: (data.body ?? [])
+        .filter((b) => b.date >= from && b.date <= end)
+        .sort((a, b) => a.date.localeCompare(b.date))
+        .map((b) => ({ Data: formatBR(b.date), 'Peso (kg)': b.weight_kg ?? '', 'Foto frente': b.photo_front ? 'Sim' : '', 'Foto lado': b.photo_side ? 'Sim' : '', Observação: b.note })),
+    },
   ]
 }
 

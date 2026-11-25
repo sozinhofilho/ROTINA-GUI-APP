@@ -96,6 +96,17 @@ export async function applyOpDb(op: Op): Promise<void> {
     case 'plan_workout.delete':
       must(await s.from('plan_workouts').delete().eq('id', op.id))
       return
+    case 'water.set':
+      if (op.row.ml > 0) must(await s.from('water_logs').upsert({ ...op.row, updated_at: now() }, { onConflict: 'date' }))
+      else must(await s.from('water_logs').delete().eq('date', op.row.date))
+      return
+    case 'body.upsert':
+      // Um check-in por dia: a data manda, mesmo que o id local seja outro.
+      must(await s.from('body_checkins').upsert({ ...op.row, updated_at: now() }, { onConflict: 'date' }))
+      return
+    case 'body.delete':
+      must(await s.from('body_checkins').delete().eq('id', op.id))
+      return
     case 'settings.update':
       must(await s.from('settings').update({ ...op.row, updated_at: now() }).eq('id', 1))
       return

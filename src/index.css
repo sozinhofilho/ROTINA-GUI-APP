@@ -13,6 +13,7 @@
   --danger: #c23b32;
   --danger-soft: #fbe2df;
   --strava: #e0531f;
+  --water: #2b7fd1;
   --shadow: 0 1px 2px rgb(20 32 42 / 0.06), 0 2px 8px rgb(20 32 42 / 0.05);
   --radius: 16px;
   --tabbar-h: 64px;
@@ -34,6 +35,8 @@
     --warn-soft: #3b2c12;
     --danger: #ff7a6e;
     --danger-soft: #3d1d1b;
+  --water: #5aa9f0;
+    --water: #5aa9f0;
     --shadow: none;
     color-scheme: dark;
   }
@@ -278,4 +281,94 @@ input:focus, select:focus, textarea:focus, button:focus-visible { outline: 2px s
 }
 @media (prefers-reduced-motion: reduce) {
   * { animation: none !important; transition: none !important; }
+}
+
+/* Água */
+.water { display: flex; flex-direction: column; gap: 10px; }
+.water-top { display: flex; justify-content: space-between; align-items: center; }
+.water-num { font-size: 1.6rem; font-variant-numeric: tabular-nums; }
+.water-bar .bar-fill { background: var(--water); top: 3px; }
+.water.ok { border-color: var(--water); }
+.water-btns { display: grid; grid-template-columns: 1fr 1fr auto; gap: 8px; }
+.water-btns .icon-btn { min-width: 56px; border: 1px solid var(--border); font-weight: 600; font-size: 0.85rem; }
+
+/* Peso e fotos */
+.body-card { display: flex; flex-direction: column; gap: 10px; }
+.body-head { display: flex; justify-content: space-between; gap: 10px; align-items: flex-start; }
+.body-head p { margin: 2px 0 0; }
+.body-grid { display: grid; grid-template-columns: 1.2fr 1fr 1fr; gap: 10px; align-items: start; }
+.photo-slot { display: flex; flex-direction: column; align-items: center; gap: 4px; }
+.photo-box {
+  width: 100%; aspect-ratio: 3 / 4; border-radius: 12px; border: 1px dashed var(--border);
+  background: var(--surface-2); color: var(--muted); display: flex; align-items: center; justify-content: center; overflow: hidden; padding: 0;
+}
+.photo-box img { width: 100%; height: 100%; object-fit: cover; }
+
+/* Fechamento */
+.score { display: flex; flex-direction: column; gap: 14px; }
+.score-top { display: flex; gap: 16px; align-items: center; }
+.score-top h2 { font-size: 1.25rem; text-wrap: balance; }
+.score-ring {
+  --p: 0; --tone: var(--muted);
+  width: 92px; height: 92px; border-radius: 50%; flex-shrink: 0; display: flex; align-items: center; justify-content: center;
+  background: radial-gradient(closest-side, var(--surface) 78%, transparent 79%), conic-gradient(var(--tone) calc(var(--p) * 1%), var(--surface-2) 0);
+}
+.score-ring b { font-size: 1.9rem; font-variant-numeric: tabular-nums; }
+.score-ring span { font-size: 0.9rem; color: var(--muted); align-self: center; margin-top: 6px; }
+.score.dentro .score-ring { --tone: var(--accent); }
+.score.bom .score-ring { --tone: var(--accent); }
+.score.abaixo .score-ring { --tone: var(--warn); }
+.score.acima .score-ring { --tone: var(--danger); }
+.pillars { display: grid; gap: 10px; }
+.pillar-head { display: flex; justify-content: space-between; font-size: 0.9rem; margin-bottom: 4px; }
+.bar.slim { height: 10px; }
+.bar.slim .bar-fill { top: 0; bottom: 0; }
+.bar-fill.good { background: var(--accent); }
+.bar-fill.mid { background: var(--warn); }
+.bar-fill.low { background: var(--danger); }
+.findings { display: grid; gap: 10px; }
+.find ul { margin: 8px 0 0; padding-left: 18px; display: grid; gap: 6px; font-size: 0.92rem; }
+.find.good { border-left: 4px solid var(--accent); }
+.find.bad { border-left: 4px solid var(--warn); }
+.weights { list-style: none; margin: 8px 0 0; padding: 0; display: grid; gap: 0; }
+.weights li { display: flex; justify-content: space-between; gap: 10px; padding: 8px 0; border-bottom: 1px solid var(--border); font-variant-numeric: tabular-nums; }
+.weights li:last-child { border-bottom: 0; }
+ul.card.weights { padding: 4px 14px; }
+.weights b.up { color: var(--danger); }
+.weights b.down { color: var(--accent); }
+.band-label { position: absolute; right: 2px; top: 0; font-size: 0.65rem; color: var(--muted); }
+.col-val { position: absolute; top: -16px; left: 0; right: 0; text-align: center; font-size: 0.62rem; color: var(--muted); font-variant-numeric: tabular-nums; }
+.col .colbar { position: relative; }
+.chart-area { margin-top: 14px; }
+.water-row { display: flex; gap: 3px; }
+.drop { flex: 1; height: 8px; border-radius: 99px; background: var(--surface-2); border: 1px solid var(--border); }
+.drop.part { background: color-mix(in srgb, var(--water) 35%, transparent); }
+.drop.ok { background: var(--water); border-color: var(--water); }
+.weeks-scroll { overflow-x: auto; }
+.weeks { display: flex; gap: 6px; height: 150px; padding-top: 16px; }
+.week { flex: 1; display: flex; flex-direction: column; align-items: center; gap: 4px; position: relative; min-width: 38px; }
+.week-track { flex: 1; width: 100%; display: flex; align-items: flex-end; background: var(--surface-2); border-radius: 6px; overflow: hidden; }
+.week-track .colbar { width: 100%; border-radius: 6px 6px 0 0; }
+.week-label { font-size: 0.68rem; color: var(--muted); }
+.week .col-val { top: -2px; position: static; order: -1; }
+
+/* Evolução */
+.weight-chart { width: 100%; height: auto; display: block; }
+.weight-chart .grid { stroke: var(--border); stroke-width: 1; }
+.weight-chart .tick { fill: var(--muted); font-size: 10px; font-variant-numeric: tabular-nums; }
+.weight-chart .wline { stroke: var(--accent); stroke-width: 2.5; stroke-linejoin: round; }
+.weight-chart .wdot { fill: var(--surface); stroke: var(--accent); stroke-width: 2; }
+.weight-chart .wdot.last { fill: var(--accent); }
+.compare { display: flex; flex-direction: column; gap: 12px; }
+.compare-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.compare-grid figure { margin: 0; display: flex; flex-direction: column; gap: 6px; }
+.compare-img { aspect-ratio: 3 / 4; border-radius: 12px; overflow: hidden; background: var(--surface-2); display: flex; align-items: center; justify-content: center; }
+.compare-img img { width: 100%; height: 100%; object-fit: cover; }
+.compare-grid figcaption { font-size: 0.82rem; }
+.compare-delta { margin: 0; text-align: center; }
+.settings-grid { grid-template-columns: repeat(4, 1fr); }
+@media (max-width: 400px) {
+  .settings-grid, .body-grid { grid-template-columns: 1fr 1fr; }
+  .body-grid > .field { grid-column: 1 / -1; }
+  .tabbar button { font-size: 0.68rem; }
 }

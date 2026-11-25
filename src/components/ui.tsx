@@ -37,6 +37,12 @@ const PATHS = {
   close: <path d="M6 6l12 12M18 6L6 18" />,
   sparkle: <path d="M12 3l2 6 6 2-6 2-2 6-2-6-6-2 6-2z" />,
   cloud: <path d="M7 18h10a4 4 0 0 0 .5-8A6 6 0 0 0 6 9a4.5 4.5 0 0 0 1 9z" />,
+  body: (
+    <>
+      <circle cx="12" cy="5" r="2.5" />
+      <path d="M7 10h10M12 10v5M12 15l-3 6M12 15l3 6" />
+    </>
+  ),
 }
 
 export function Sheet({ open, title, onClose, children }: { open: boolean; title: string; onClose: () => void; children: ReactNode }) {

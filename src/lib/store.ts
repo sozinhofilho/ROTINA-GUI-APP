@@ -13,6 +13,8 @@ export interface State {
   view: AppData | null
   photoUrls: Record<string, string>
   features: Features
+  /** Primeira data com registro (visão acumulada). */
+  firstDate: string | null
   ranges: { from: string; to: string; at: number }[]
   pending: Op[]
   syncing: boolean
@@ -33,6 +35,8 @@ const EMPTY: AppData = {
   meal_logs: [],
   workout_logs: [],
   extras: [],
+  water: [],
+  body: [],
 }
 
 function load<T>(key: string, fallback: T): T {
@@ -60,6 +64,7 @@ let state: State = {
   view: cached.server ? initialPending.reduce(applyOp, cached.server) : null,
   photoUrls: {},
   features: cached.features ?? { photo_ai: false, strava_configured: false, strava_connected: false },
+  firstDate: null,
   ranges: [],
   pending: initialPending,
   syncing: false,
@@ -116,6 +121,8 @@ function mergeServer(prev: AppData | null, resp: AppData, from: string, to: stri
     meal_logs: [...keep(prev?.meal_logs), ...resp.meal_logs],
     workout_logs: [...keep(prev?.workout_logs), ...resp.workout_logs],
     extras: [...keep(prev?.extras), ...resp.extras],
+    water: [...keep(prev?.water), ...(resp.water ?? [])],
+    body: [...keep(prev?.body), ...(resp.body ?? [])],
   }
 }
 
@@ -142,6 +149,7 @@ export function ensureRange(from: string, to: string, opts: { force?: boolean; m
         view: recompute(server, state.pending),
         photoUrls: { ...state.photoUrls, ...resp.photo_urls },
         features: resp.features,
+        firstDate: resp.first_date ?? state.firstDate,
         ranges: [...state.ranges.filter((r) => !(r.from >= from && r.to <= to)), { from, to, at: Date.now() }],
         online: true,
         authError: false,

@@ -9,13 +9,15 @@ const DEMO = import.meta.env.MODE === 'demo'
 import { Export } from './screens/Export.tsx'
 import { Plan } from './screens/Plan.tsx'
 import { Summary } from './screens/Summary.tsx'
+import { Progress } from './screens/Progress.tsx'
 import { Today } from './screens/Today.tsx'
 
-type Tab = 'hoje' | 'plano' | 'resumo' | 'exportar'
-const TABS: { id: Tab; label: string; icon: 'today' | 'plan' | 'chart' | 'download' }[] = [
+type Tab = 'hoje' | 'resumo' | 'evolucao' | 'plano' | 'exportar'
+const TABS: { id: Tab; label: string; icon: 'today' | 'plan' | 'chart' | 'download' | 'body' }[] = [
   { id: 'hoje', label: 'Hoje', icon: 'today' },
+  { id: 'resumo', label: 'Fechamento', icon: 'chart' },
+  { id: 'evolucao', label: 'Evolução', icon: 'body' },
   { id: 'plano', label: 'Plano', icon: 'plan' },
-  { id: 'resumo', label: 'Resumo', icon: 'chart' },
   { id: 'exportar', label: 'Exportar', icon: 'download' },
 ]
 
@@ -79,6 +81,7 @@ export default function App() {
         {tab === 'hoje' && <Today date={date} setDate={setDate} />}
         {tab === 'plano' && <Plan />}
         {tab === 'resumo' && <Summary />}
+        {tab === 'evolucao' && <Progress />}
         {tab === 'exportar' && <Export goToDay={(d) => { setDate(d); go('hoje') }} />}
       </main>
       <Toast />

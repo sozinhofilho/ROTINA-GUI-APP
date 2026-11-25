@@ -18,6 +18,20 @@ export const SettingsSchema = z.object({
   tolerance_pct: z.number().min(0).max(100),
   base_expenditure: z.number().int().min(0).max(10000).nullable(),
   timezone: z.string().min(1).max(60),
+  water_goal_ml: z.number().int().min(0).max(15000),
+})
+
+const photoPath = z.string().regex(/^\d{4}-\d{2}\/[\w.-]+$/, 'caminho de foto inválido').max(200)
+
+export const WaterLogSchema = z.object({ date: isoDate, ml: z.number().int().min(0).max(20000) })
+
+export const BodyCheckinSchema = z.object({
+  id: uuid,
+  date: isoDate,
+  weight_kg: z.number().min(20).max(400).nullable(),
+  photo_front: photoPath.nullable(),
+  photo_side: photoPath.nullable(),
+  note: longText,
 })
 
 export const MealItemSchema = z.object({
@@ -138,6 +152,9 @@ export const OpSchema = z.discriminatedUnion('t', [
   z.object({ t: z.literal('plan_workout.upsert'), row: PlanWorkoutSchema }),
   z.object({ t: z.literal('plan_workout.delete'), id: uuid }),
   z.object({ t: z.literal('settings.update'), row: SettingsSchema.partial() }),
+  z.object({ t: z.literal('water.set'), row: WaterLogSchema }),
+  z.object({ t: z.literal('body.upsert'), row: BodyCheckinSchema }),
+  z.object({ t: z.literal('body.delete'), id: uuid }),
 ])
 export type Op = z.infer<typeof OpSchema>
 

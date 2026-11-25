@@ -1,14 +1,13 @@
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useState } from 'react'
 import { expandDay, type DayMeal, type DayStats, type DayWorkout } from '../../shared/calc.ts'
-import { addDays, formatDayLabel, formatShort, nowHHMM, todayISO } from '../../shared/dates.ts'
+import { addDays, formatDayLabel, formatShort, nowHHMM, todayISO, weekdayOf } from '../../shared/dates.ts'
 import { uuid } from '../../shared/logic.ts'
-import type { AiEstimate, AppData, ExtraCategory, ExtraEntry, MealLog, WorkoutLog } from '../../shared/types.ts'
+import type { AppData, ExtraCategory, ExtraEntry, MealLog, WorkoutLog } from '../../shared/types.ts'
 import { MoveWorkoutSheet } from '../components/MoveWorkoutSheet.tsx'
 import { CheckButton, Field, Icon, LazyInput, Sheet } from '../components/ui.tsx'
 import { fmt, toIntOrNull } from '../lib/format.ts'
-import { ApiError, postJson } from '../lib/api.ts'
-import { uploadPhoto } from '../lib/photo.ts'
-import { dispatch, ensureRange, setPhotoUrl, toast, useStore } from '../lib/store.ts'
+import { dispatch, ensureRange, useStore } from '../lib/store.ts'
+import { BodyCard, WaterCard } from '../components/BodyWater.tsx'
 
 export function Today({ date, setDate }: { date: string; setDate: (d: string) => void }) {
   const data = useStore((s) => s.view)
@@ -44,6 +43,10 @@ export function Today({ date, setDate }: { date: string; setDate: (d: string) =>
       </header>
 
       <Progress stats={day.stats} />
+
+      <WaterCard date={date} ml={day.stats.waterMl} goal={day.stats.waterGoal} />
+
+      {(weekdayOf(date) === 1 || weekdayOf(date) === 5 || day.body) && <BodyCard date={date} checkin={day.body} />}
 
       <section>
         <h2 className="section-title">
@@ -147,10 +150,6 @@ function emptyMealLog(date: string, m: DayMeal): MealLog {
 
 function MealCard({ date, meal }: { date: string; meal: DayMeal }) {
   const [open, setOpen] = useState(false)
-  const [busy, setBusy] = useState<'' | 'foto' | 'ia'>('')
-  const features = useStore((s) => s.features)
-  const photoUrl = useStore((s) => (meal.log?.photo_path ? s.photoUrls[meal.log.photo_path] : undefined))
-  const fileRef = useRef<HTMLInputElement>(null)
   const log = meal.log
   const plan = meal.plan
   const done = !!log?.done
@@ -158,36 +157,6 @@ function MealCard({ date, meal }: { date: string; meal: DayMeal }) {
   const save = (patch: Partial<MealLog>) => {
     const base = log ?? emptyMealLog(date, meal)
     dispatch({ t: 'meal_log.upsert', row: { ...base, ...patch } })
-  }
-
-  const onPhoto = async (file: File | undefined) => {
-    if (!file) return
-    setBusy('foto')
-    try {
-      const { path, url } = await uploadPhoto(date, file)
-      if (url) setPhotoUrl(path, url)
-      save({ photo_path: path })
-      toast('Foto anexada')
-    } catch (err) {
-      toast(err instanceof ApiError && err.status === 0 ? 'Sem internet: tente a foto depois' : `Erro na foto: ${(err as Error).message}`, 'erro')
-    } finally {
-      setBusy('')
-      if (fileRef.current) fileRef.current.value = ''
-    }
-  }
-
-  const onAnalyze = async () => {
-    if (!log?.photo_path) return
-    setBusy('ia')
-    try {
-      const hint = plan ? `${plan.name}: ${plan.items.map((i) => `${i.food} ${i.qty}`).join(', ')}` : meal.name
-      const r = await postJson<{ estimate: AiEstimate }>('/api/analyze-photo', { path: log.photo_path, hint })
-      save({ ai_estimate: r.estimate })
-    } catch (err) {
-      toast(`IA: ${(err as Error).message}`, 'erro')
-    } finally {
-      setBusy('')
-    }
   }
 
   const kcalShown = log?.kcal_real ?? plan?.kcal ?? log?.kcal_planned ?? 0
@@ -227,45 +196,12 @@ function MealCard({ date, meal }: { date: string; meal: DayMeal }) {
               </tbody>
             </table>
           )}
-          <div className="grid2">
-            <Field label="Calorias reais" hint="Vazio = usa o previsto">
-              {(id) => (
-                <LazyInput id={id} value={log?.kcal_real?.toString() ?? ''} inputMode="numeric"
-                  placeholder={String(plan?.kcal ?? '')} onCommit={(v) => save({ kcal_real: toIntOrNull(v) })} />
-              )}
-            </Field>
-            <div className="field">
-              <label>Foto do prato</label>
-              <input ref={fileRef} type="file" accept="image/*" capture="environment" hidden
-                onChange={(e) => void onPhoto(e.target.files?.[0])} />
-              <button className="btn secondary" onClick={() => fileRef.current?.click()} disabled={busy !== ''}>
-                <Icon name="camera" size={18} /> {busy === 'foto' ? 'Enviando…' : log?.photo_path ? 'Trocar foto' : 'Anexar'}
-              </button>
-            </div>
-          </div>
-          {log?.photo_path && (
-            <div className="photo">
-              {photoUrl ? <img src={photoUrl} alt={`Foto: ${meal.name}`} loading="lazy" /> : <span className="muted small">Foto anexada</span>}
-              <button className="link danger" onClick={() => save({ photo_path: null, ai_estimate: null })}>remover foto</button>
-            </div>
-          )}
-          {log?.photo_path && features.photo_ai && (
-            <button className="btn secondary block" onClick={() => void onAnalyze()} disabled={busy !== ''}>
-              <Icon name="sparkle" size={18} /> {busy === 'ia' ? 'Analisando…' : 'Estimar calorias com IA'}
-            </button>
-          )}
-          {log?.ai_estimate && (
-            <div className="ai-box">
-              <b>Estimativa da IA (pode errar): ~{fmt(log.ai_estimate.kcal)} kcal</b>
-              <span className="small">
-                P {log.ai_estimate.protein ?? '–'} · C {log.ai_estimate.carbs ?? '–'} · G {log.ai_estimate.fat ?? '–'} g
-              </span>
-              <span className="small muted">{log.ai_estimate.description}</span>
-              <button className="btn secondary" onClick={() => save({ kcal_real: log.ai_estimate!.kcal, done: true })}>
-                Usar {fmt(log.ai_estimate.kcal)} kcal
-              </button>
-            </div>
-          )}
+          <Field label="Calorias reais" hint="Vazio = usa o previsto. Para conferir pela foto do prato, mande no chat do Claude.">
+            {(id) => (
+              <LazyInput id={id} value={log?.kcal_real?.toString() ?? ''} inputMode="numeric"
+                placeholder={String(plan?.kcal ?? '')} onCommit={(v) => save({ kcal_real: toIntOrNull(v) })} />
+            )}
+          </Field>
           <Field label="Observação">
             {(id) => <LazyInput id={id} multiline value={log?.note ?? ''} onCommit={(v) => save({ note: v })} placeholder="Ex.: troquei arroz por batata" />}
           </Field>

@@ -10,6 +10,8 @@ export interface Settings {
   tolerance_pct: number
   base_expenditure: number | null
   timezone: string
+  /** Meta diária de água em ml. */
+  water_goal_ml: number
 }
 
 export interface MealItem {
@@ -114,9 +116,29 @@ export interface AppData {
   meal_logs: MealLog[]
   workout_logs: WorkoutLog[]
   extras: ExtraEntry[]
+  water: WaterLog[]
+  body: BodyCheckin[]
+}
+
+/** Água do dia (um registro por data). */
+export interface WaterLog {
+  date: string
+  ml: number
+}
+
+/** Peso em jejum e fotos de evolução (segunda e sexta). */
+export interface BodyCheckin {
+  id: string
+  date: string
+  weight_kg: number | null
+  photo_front: string | null
+  photo_side: string | null
+  note: string
 }
 
 export interface DataResponse extends AppData {
+  /** Primeira data com qualquer registro (para a visão acumulada). */
+  first_date: string | null
   photo_urls: Record<string, string>
   features: { photo_ai: boolean; strava_configured: boolean; strava_connected: boolean }
 }
@@ -126,4 +148,5 @@ export const DEFAULT_SETTINGS: Settings = {
   tolerance_pct: 10,
   base_expenditure: null,
   timezone: 'America/Sao_Paulo',
+  water_goal_ml: 5000,
 }
