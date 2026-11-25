@@ -28,3 +28,4 @@ dist-ssr
 .env.*
 .netlify
 dist-demo
+rotina-demo.html

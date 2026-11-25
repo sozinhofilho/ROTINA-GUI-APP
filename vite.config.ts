@@ -39,5 +39,6 @@ export default defineConfig(({ mode }) => ({
     mode === 'demo'
       ? { alias: { 'virtual:pwa-register': fileURLToPath(new URL('./src/demo-stubs/pwa-register.ts', import.meta.url)) } }
       : {},
-  ...(mode === 'demo' ? { base: './', build: { outDir: 'dist-demo' } } : {}),
+  // Demo num JS só (sem chunks), para virar um único arquivo .html (scripts/build-demo-html.mjs).
+  ...(mode === 'demo' ? { base: './', build: { outDir: 'dist-demo', rollupOptions: { output: { inlineDynamicImports: true } } } } : {}),
 }))
