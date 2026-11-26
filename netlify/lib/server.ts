@@ -42,6 +42,12 @@ export function db(): SupabaseClient {
   const url = env('SUPABASE_URL')
   const key = env('SUPABASE_SERVICE_ROLE_KEY')
   if (!url || !key) throw new HttpError(500, 'SUPABASE_URL / SUPABASE_SERVICE_ROLE_KEY não configurados')
+  if (!/^https:\/\/[a-z0-9-]+\.supabase\.co\/?$/i.test(url)) {
+    throw new HttpError(500, 'SUPABASE_URL inválida: na Netlify o valor deve ser só https://SEU-PROJETO.supabase.co (sem aspas, sem NEXT_PUBLIC_SUPABASE_URL=, sem /rest/v1)')
+  }
+  if (/^sb_publishable_/.test(key) || /^NEXT_PUBLIC|=/.test(key)) {
+    throw new HttpError(500, 'SUPABASE_SERVICE_ROLE_KEY inválida: use a Secret key (começa com sb_secret_) ou a service_role, não a publishable')
+  }
   client = createClient(url, key, { auth: { persistSession: false, autoRefreshToken: false } })
   return client
 }
