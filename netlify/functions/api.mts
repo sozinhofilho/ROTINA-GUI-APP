@@ -248,7 +248,15 @@ export default async (req: Request, ctx: Context): Promise<Response> => {
   try {
     if (!route) throw new HttpError(404, 'rota não encontrada')
     if (!route.method.includes(req.method)) throw new HttpError(405, 'método não permitido')
-    if (!route.public) checkToken(req)
+    if (!route.public) {
+      try {
+        checkToken(req)
+      } catch (err) {
+        // Senha errada: espera 1,5 s antes de responder, para dificultar tentativa e erro.
+        if (err instanceof HttpError && err.status === 401) await new Promise((r) => setTimeout(r, 1500))
+        throw err
+      }
+    }
     return await route.handler(req, url, ctx)
   } catch (err) {
     if (err instanceof HttpError) return json({ error: err.message }, err.status)

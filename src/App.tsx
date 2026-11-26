@@ -109,24 +109,24 @@ function Toast() {
   return <div className={`toast ${t.kind}`} role="alert">{t.text}</div>
 }
 
-/** Tela de acesso: no iPhone, o app da tela de início abre sem o ?k= do link, então o código é colado aqui uma vez. */
+/** Tela de acesso: a senha (APP_TOKEN) é digitada uma vez por aparelho e fica salva. */
 function Locked({ expired }: { expired: boolean }) {
   const [value, setValue] = useState('')
   const [error, setError] = useState('')
   const submit = (e: React.FormEvent) => {
     e.preventDefault()
-    if (!saveToken(value)) return setError('Não reconheci. Cole o link inteiro que começa com https://rotina-gui.netlify.app/?k=')
+    if (!saveToken(value)) return setError('Senha curta demais.')
     invalidate()
     window.location.replace(window.location.pathname)
   }
   return (
     <main className="locked">
       <h1>Rotina</h1>
-      <p>{expired ? 'O código de acesso salvo não vale mais. Cole o link de acesso de novo.' : 'Cole aqui o seu link de acesso (só precisa fazer isso uma vez neste aparelho).'}</p>
+      <p>{expired ? 'Senha incorreta ou alterada. Digite de novo.' : 'Digite sua senha. Ela fica salva neste aparelho.'}</p>
       <form className="locked-form" onSubmit={submit}>
-        <label htmlFor="access-link" className="muted small">Link de acesso</label>
-        <input id="access-link" value={value} onChange={(e) => { setValue(e.target.value); setError('') }}
-          placeholder="https://rotina-gui.netlify.app/?k=…" autoComplete="off" autoCapitalize="off" spellCheck={false} />
+        <label htmlFor="access-pass" className="muted small">Senha</label>
+        <input id="access-pass" type="password" value={value} onChange={(e) => { setValue(e.target.value); setError('') }}
+          autoComplete="current-password" autoCapitalize="off" spellCheck={false} autoFocus />
         {error && <p className="msg erro">{error}</p>}
         <button className="btn block" type="submit" disabled={!value.trim()}>Entrar</button>
       </form>

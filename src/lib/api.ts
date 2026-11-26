@@ -39,7 +39,7 @@ export function bootstrapToken(): string | null {
 
 let memoryToken: string | null = null
 
-/** Salva o código colado na tela de acesso (aceita o link inteiro ou só o código). */
+/** Salva a senha digitada na tela de acesso (aceita também o link antigo com ?k=). */
 export function saveToken(input: string): string | null {
   const raw = input.trim()
   let t = raw
@@ -49,7 +49,7 @@ export function saveToken(input: string): string | null {
     t = ''
   }
   t = t.replace(/^k=/, '').trim()
-  if (t.length < 20) return null
+  if (t.length < 4) return null
   try {
     localStorage.setItem(TOKEN_KEY, t)
   } catch {
