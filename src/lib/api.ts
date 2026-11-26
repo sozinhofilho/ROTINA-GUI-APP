@@ -39,6 +39,26 @@ export function bootstrapToken(): string | null {
 
 let memoryToken: string | null = null
 
+/** Salva o código colado na tela de acesso (aceita o link inteiro ou só o código). */
+export function saveToken(input: string): string | null {
+  const raw = input.trim()
+  let t = raw
+  try {
+    if (/^https?:\/\//i.test(raw)) t = new URL(raw).searchParams.get('k') ?? ''
+  } catch {
+    t = ''
+  }
+  t = t.replace(/^k=/, '').trim()
+  if (t.length < 20) return null
+  try {
+    localStorage.setItem(TOKEN_KEY, t)
+  } catch {
+    /* sem storage: vale só nesta abertura */
+  }
+  memoryToken = t
+  return t
+}
+
 /** Usado só pela demonstração, que não tem link secreto. */
 export function setMemoryToken(t: string): void {
   memoryToken = t

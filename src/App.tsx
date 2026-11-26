@@ -1,8 +1,8 @@
 import { useEffect, useState } from 'react'
 import { todayISO } from '../shared/dates.ts'
 import { Icon } from './components/ui.tsx'
-import { getToken } from './lib/api.ts'
-import { useStore } from './lib/store.ts'
+import { getToken, saveToken } from './lib/api.ts'
+import { invalidate, useStore } from './lib/store.ts'
 import { resetDemo } from './demo.ts'
 
 const DEMO = import.meta.env.MODE === 'demo'
@@ -59,14 +59,7 @@ export default function App() {
     window.scrollTo(0, 0)
   }
 
-  if (!getToken() || authError) {
-    return (
-      <main className="locked">
-        <h1>Rotina</h1>
-        <p>{authError ? 'O link de acesso não é mais válido.' : 'Abra o app pelo seu link secreto (com ?k=…).'}</p>
-      </main>
-    )
-  }
+  if (!getToken() || authError) return <Locked expired={authError} />
 
   return (
     <>
@@ -114,4 +107,29 @@ function Toast() {
   const t = useStore((s) => s.toast)
   if (!t) return null
   return <div className={`toast ${t.kind}`} role="alert">{t.text}</div>
+}
+
+/** Tela de acesso: no iPhone, o app da tela de início abre sem o ?k= do link, então o código é colado aqui uma vez. */
+function Locked({ expired }: { expired: boolean }) {
+  const [value, setValue] = useState('')
+  const [error, setError] = useState('')
+  const submit = (e: React.FormEvent) => {
+    e.preventDefault()
+    if (!saveToken(value)) return setError('Não reconheci. Cole o link inteiro que começa com https://rotina-gui.netlify.app/?k=')
+    invalidate()
+    window.location.replace(window.location.pathname)
+  }
+  return (
+    <main className="locked">
+      <h1>Rotina</h1>
+      <p>{expired ? 'O código de acesso salvo não vale mais. Cole o link de acesso de novo.' : 'Cole aqui o seu link de acesso (só precisa fazer isso uma vez neste aparelho).'}</p>
+      <form className="locked-form" onSubmit={submit}>
+        <label htmlFor="access-link" className="muted small">Link de acesso</label>
+        <input id="access-link" value={value} onChange={(e) => { setValue(e.target.value); setError('') }}
+          placeholder="https://rotina-gui.netlify.app/?k=…" autoComplete="off" autoCapitalize="off" spellCheck={false} />
+        {error && <p className="msg erro">{error}</p>}
+        <button className="btn block" type="submit" disabled={!value.trim()}>Entrar</button>
+      </form>
+    </main>
+  )
 }
