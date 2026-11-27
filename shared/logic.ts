@@ -30,6 +30,20 @@ export function applyOp(data: AppData, op: Op): AppData {
     }
     case 'meal_log.delete':
       return { ...data, meal_logs: data.meal_logs.filter((x) => x.id !== op.id) }
+    case 'meal_log.patch': {
+      const ex = findMealLog(data, op)
+      const row: MealLog = ex
+        ? { ...ex, ...op.set }
+        : { id: op.id, date: op.date, plan_meal_id: op.plan_meal_id, meal_name: op.meal_name, done: false, kcal_planned: op.kcal_planned, kcal_real: null, note: '', photo_path: null, ai_estimate: null, ...op.set }
+      return { ...data, meal_logs: [...data.meal_logs.filter((x) => x !== ex), row] }
+    }
+    case 'workout_log.patch': {
+      const ex = findWorkoutLog(data, op)
+      const row: WorkoutLog = ex
+        ? { ...ex, ...op.set }
+        : { id: op.id, date: op.date, plan_workout_id: op.plan_workout_id, name: op.name, done: false, duration_min: null, kcal: null, distance_m: null, avg_hr: null, avg_pace: null, note: '', source: 'manual', strava_activity_id: null, ...op.set }
+      return { ...data, workout_logs: [...data.workout_logs.filter((x) => x !== ex), row] }
+    }
     case 'workout_log.upsert': {
       const r = op.row as WorkoutLog
       return {
@@ -216,6 +230,19 @@ export function importDayToOps(day: ImportDay, data: AppData): Op[] {
   return pruneNoops(ops, data)
 }
 
+type MealPatch = Extract<Op, { t: 'meal_log.patch' }>
+type WorkoutPatch = Extract<Op, { t: 'workout_log.patch' }>
+
+export function findMealLog(data: AppData, op: Pick<MealPatch, 'id' | 'date' | 'plan_meal_id'>): MealLog | undefined {
+  return data.meal_logs.find((x) => x.id === op.id) ??
+    (op.plan_meal_id ? data.meal_logs.find((x) => x.date === op.date && x.plan_meal_id === op.plan_meal_id) : undefined)
+}
+
+export function findWorkoutLog(data: AppData, op: Pick<WorkoutPatch, 'id' | 'date' | 'plan_workout_id'>): WorkoutLog | undefined {
+  return data.workout_logs.find((x) => x.id === op.id) ??
+    (op.plan_workout_id ? data.workout_logs.find((x) => x.date === op.date && x.plan_workout_id === op.plan_workout_id) : undefined)
+}
+
 export function extraId(date: string, description: string, kcal: number, time: string | null): string {
   return stableId('extra', date, description, kcal, time)
 }
@@ -281,6 +308,14 @@ export function isNoop(op: Op, data: AppData): boolean {
       return !(data.body ?? []).some((b) => b.id === op.id)
     case 'meal_log.delete':
       return !data.meal_logs.some((x) => x.id === op.id)
+    case 'meal_log.patch': {
+      const ex = findMealLog(data, op) as unknown as Record<string, unknown> | undefined
+      return !!ex && Object.entries(op.set).every(([k, v]) => JSON.stringify(ex[k] ?? null) === JSON.stringify(v ?? null))
+    }
+    case 'workout_log.patch': {
+      const ex = findWorkoutLog(data, op) as unknown as Record<string, unknown> | undefined
+      return !!ex && Object.entries(op.set).every(([k, v]) => JSON.stringify(ex[k] ?? null) === JSON.stringify(v ?? null))
+    }
     case 'workout_log.delete':
       return !data.workout_logs.some((x) => x.id === op.id)
     case 'extra.delete':

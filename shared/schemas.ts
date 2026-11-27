@@ -138,6 +138,26 @@ export const OpSchema = z.discriminatedUnion('t', [
   z.object({ t: z.literal('meal_log.delete'), id: uuid }),
   z.object({ t: z.literal('workout_log.upsert'), row: WorkoutLogSchema }),
   z.object({ t: z.literal('workout_log.delete'), id: uuid }),
+  // Muda só os campos de `set`; se não houver registro, cria um com o resto vazio.
+  z.object({
+    t: z.literal('meal_log.patch'),
+    id: uuid,
+    date: isoDate,
+    plan_meal_id: uuid.nullable(),
+    meal_name: z.string().max(80),
+    kcal_planned: kcal.nullable(),
+    set: z.object({ done: z.boolean(), kcal_real: kcal.nullable(), note: longText }).partial(),
+  }),
+  z.object({
+    t: z.literal('workout_log.patch'),
+    id: uuid,
+    date: isoDate,
+    plan_workout_id: uuid.nullable(),
+    name: z.string().max(120),
+    set: z
+      .object({ done: z.boolean(), duration_min: z.number().int().min(0).max(1440).nullable(), kcal: kcal.nullable(), note: longText })
+      .partial(),
+  }),
   z.object({
     t: z.literal('workout_log.assign'),
     id: uuid,

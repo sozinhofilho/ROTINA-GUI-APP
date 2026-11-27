@@ -2,6 +2,7 @@
 import type { DayStats } from '../../shared/calc.ts'
 import { formatShort, WEEKDAY_SHORT, weekdayOf } from '../../shared/dates.ts'
 import type { WeekPoint, WeightPoint } from '../../shared/review.ts'
+import type { BalanceDay } from '../../shared/balance.ts'
 import { fmt, formatKg } from '../lib/format.ts'
 
 /** Kcal por dia com a faixa da meta, e a água do dia logo abaixo. */
@@ -107,5 +108,51 @@ export function WeightChart({ points }: { points: WeightPoint[] }) {
       <text x={pad.l} y={H - 6} className="tick">{formatShort(points[0].date)}</text>
       {points.length > 1 && <text x={W - pad.r} y={H - 6} textAnchor="end" className="tick">{formatShort(last.date)}</text>}
     </svg>
+  )
+}
+
+/**
+ * Saldo diário em barras a partir do zero: para cima = superávit (vermelho), para baixo = déficit (verde).
+ * Dia sem registro de comida = marca cinza no zero. Dia em andamento = barra tracejada com a projeção.
+ */
+export function BalanceChart({ days }: { days: BalanceDay[] }) {
+  if (!days.length) return null
+  const vals = days.flatMap((d) => [d.balance ?? 0, d.projection?.balance ?? 0])
+  const lim = Math.max(500, ...vals.map((v) => Math.abs(v)))
+  const top = Math.ceil(lim / 500) * 500
+  const h = (v: number) => `${(Math.abs(v) / top) * 50}%`
+  const many = days.length > 10
+  return (
+    <div className="card chart">
+      <div className="chart-head">
+        <b>Saldo por dia</b>
+        <span className="legend">
+          <i className="dot deficit" /> déficit <i className="dot surplus" /> superávit <i className="dot vazio" /> sem registro
+        </span>
+      </div>
+      <div className="balance-area" role="img" aria-label="Saldo calórico por dia">
+        <span className="axis-label top">+{fmt(top)}</span>
+        <span className="axis-label mid">0</span>
+        <span className="axis-label bottom">−{fmt(top)}</span>
+        <div className="zero-line" />
+        {days.map((d) => {
+          const v = d.inProgress ? (d.projection?.balance ?? d.balance) : d.balance
+          const cls = v == null ? 'none' : v < 0 ? 'deficit' : 'surplus'
+          return (
+            <div key={d.date} className="bcol" title={`${formatShort(d.date)}: ${v == null ? 'sem registro' : `${v > 0 ? '+' : ''}${fmt(v)} kcal`}${d.inProgress ? ' (projeção)' : ''}`}>
+              {v != null && (
+                <div className={`bbar ${cls} ${d.inProgress ? 'proj' : ''}`} style={v < 0 ? { top: '50%', height: h(v) } : { bottom: '50%', height: h(v) }} />
+              )}
+              {v == null && <div className="bnone" />}
+            </div>
+          )
+        })}
+      </div>
+      <div className="chart-axis">
+        {days.map((d, i) => (
+          <span key={d.date} className={d.inProgress ? 'now' : ''}>{!many ? WEEKDAY_SHORT[weekdayOf(d.date)] : i % 5 === 0 ? d.date.slice(8) : ''}</span>
+        ))}
+      </div>
+    </div>
   )
 }

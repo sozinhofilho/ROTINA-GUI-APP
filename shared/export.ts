@@ -2,6 +2,7 @@
 import { expandDay, mealKcal, summarize, workoutKcal } from './calc.ts'
 import { addDays, dateRange, formatBR, weekStart } from './dates.ts'
 import { review } from './review.ts'
+import { weeklyBalance } from './balance.ts'
 import type { AppData } from './types.ts'
 
 const STATUS: Record<string, string> = { vazio: 'Sem registro', abaixo: 'Abaixo', dentro: 'Dentro', acima: 'Acima' }
@@ -47,10 +48,14 @@ export function buildExportSheets(data: AppData, from: string, to: string, today
       'Refeições previstas': s.mealsTotal,
       'Treinos feitos': s.workoutsDone,
       'Treinos previstos': s.workoutsPlanned,
+      'Registro de comida': s.hasRecord ? 'Sim' : 'Não',
+      'Gasto basal': s.base ?? '',
       'Kcal treinos': s.kcalWorkouts,
-      'Gasto base': s.base ?? '',
-      'Gasto total': s.spent,
-      Saldo: s.balance ?? '',
+      'Kcal treinos estimadas (sem valor real)': s.kcalWorkoutsEstimated,
+      'Gasto total (basal + treinos)': s.base != null ? s.spent : '',
+      'Saldo (consumido − gasto total)': s.balance ?? '',
+      'Situação do saldo': s.balance == null ? (s.hasRecord ? '' : 'sem registro') : s.balance < 0 ? 'déficit' : s.balance > 0 ? 'superávit' : 'zerado',
+      'Dia em andamento': v.date === today ? 'Sim' : '',
       'Água (L)': s.waterMl / 1000,
       'Meta de água': s.waterOk ? 'Sim' : 'Não',
       'Peso (kg)': s.weightKg ?? '',
@@ -125,12 +130,33 @@ export function buildExportSheets(data: AppData, from: string, to: string, today
     }
   }
 
+  const evolution = weeklyBalance(from, end, data, today).map((w) => ({
+    'Semana (seg)': formatBR(w.weekStart),
+    'Dias encerrados': w.closedDays,
+    'Dias com registro': w.daysWithFood,
+    'Dias sem registro': w.daysWithoutFood,
+    'Consumo médio (kcal)': w.avgKcalIn ?? '',
+    'Gasto basal': w.base ?? '',
+    'Gasto total médio (kcal)': w.avgSpent ?? '',
+    'Saldo médio/dia (kcal)': w.avgBalance ?? '',
+    'Saldo acumulado (kcal)': w.totalBalance ?? '',
+    'Gordura equivalente (kg, estimativa)': w.fatKg ?? '',
+    'Dias em déficit': w.deficitDays,
+    'Dias em superávit': w.surplusDays,
+    'Treinos feitos': w.workoutsDone,
+    'Treinos previstos': w.workoutsPlanned,
+    'Treinos que faltaram': w.missedWorkouts.map((m) => `${m.name} (${formatBR(m.date)})`).join(', '),
+    'Kcal em treino (total)': w.workoutKcalTotal,
+    'Kcal em treino estimadas': w.workoutKcalEstimated,
+    'Kcal em treino por dia': w.workoutKcalAvgPerDay,
+  }))
   return [
     { name: 'Resumo diário', rows: daily },
     { name: 'Refeições', rows: meals },
     { name: 'Treinos', rows: workouts },
     { name: 'Extras', rows: extras },
     { name: 'Resumo semanal', rows: weekly },
+    { name: 'Evolução', rows: evolution },
     {
       name: 'Peso',
       rows: (data.body ?? [])

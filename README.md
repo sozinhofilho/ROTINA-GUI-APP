@@ -32,8 +32,17 @@ Desenvolvimento: `npm install`, `npm run check` (lint, tipos, testes e build). P
 ## Peso, fotos e água
 
 * **Peso e fotos:** na segunda e na sexta a tela Hoje mostra o cartão "Peso e fotos" (peso em jejum, foto de frente e de lado). As fotos ficam no bucket privado do Supabase.
-* **Evolução:** gráfico do peso, efeito médio do fim de semana (sexta → segunda) e comparação de fotos antes e depois, de frente ou de lado.
+* **Controle de Peso:** gráfico das pesagens, média semanal com variação contra a semana anterior, efeito médio do fim de semana (sexta → segunda) e fotos antes e depois, de frente ou de lado.
 * **Água:** botões +500 ml e +1 L; meta padrão de 5 L, ajustável no Plano.
+
+## Evolução: saldo calórico (semana, mês e acumulado)
+
+* Por dia com registro de comida: **gasto total = gasto basal (Plano → Ajustes) + kcal dos treinos feitos** (sempre o valor real registrado; a estimativa do plano só entra quando não há valor real, e aparece marcada como estimada). **Saldo = consumido (refeições + extras) − gasto total**; negativo é déficit (verde), positivo é superávit (vermelho).
+* Dias sem registro de comida não entram em médias nem no saldo ("X dias sem registro"). O dia de hoje aparece "em andamento", fora das médias, com a projeção se as refeições restantes forem feitas como no plano.
+* Mostra: saldo acumulado e médio/dia, equivalente em gordura (saldo ÷ 7.700, estimativa), dias em déficit e em superávit, consumo médio, gasto total médio, kcal em treino (total e por dia), treinos feitos/previstos e quais faltaram, comparação com o período anterior e gráfico do saldo diário. A tela Hoje mostra o saldo do dia.
+* Sem gasto basal definido, a aba avisa para definir em Ajustes.
+* O conector do Claude devolve os mesmos números em `get_review` (campo `balance`) e `get_range` (`metrics.balance`); o Excel tem as colunas no Resumo diário e a aba Evolução.
+* Marcar ou desmarcar o check de refeição ou treino só muda o "feito": kcal reais, duração e observações já registradas nunca são trocadas pelos valores do plano.
 
 ## Fechamento (semana, mês e acumulado)
 

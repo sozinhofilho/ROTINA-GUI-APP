@@ -39,6 +39,8 @@ export interface DayStats {
   status: 'vazio' | 'abaixo' | 'dentro' | 'acima'
   inGoal: boolean
   kcalWorkouts: number
+  /** Parte de kcalWorkouts que veio da estimativa do plano (treino feito sem kcal real). */
+  kcalWorkoutsEstimated: number
   base: number | null
   spent: number
   balance: number | null
@@ -73,6 +75,7 @@ export function mealKcal(log: MealLog, plan: PlanMeal | null): number {
   return log.kcal_real ?? log.kcal_planned ?? plan?.kcal ?? 0
 }
 
+/** Kcal do treino feito: sempre o valor real registrado; a estimativa do plano só quando não há valor real. */
 export function workoutKcal(log: WorkoutLog, plan: PlanWorkout | null): number {
   return log.kcal ?? plan?.kcal ?? 0
 }
@@ -161,6 +164,7 @@ export function computeStats(
 
   const doneWorkouts = workouts.filter((w) => w.log?.done)
   const kcalWorkouts = doneWorkouts.reduce((s, w) => s + workoutKcal(w.log!, w.plan), 0)
+  const kcalWorkoutsEstimated = doneWorkouts.filter((w) => w.log!.kcal == null).reduce((s, w) => s + (w.plan?.kcal ?? 0), 0)
   const base = settings.base_expenditure
   const spent = kcalWorkouts + (base ?? 0)
   const planned = workouts.filter((w) => w.plan)
@@ -189,9 +193,11 @@ export function computeStats(
     status,
     inGoal,
     kcalWorkouts,
+    kcalWorkoutsEstimated,
     base,
     spent,
-    balance: base != null ? kcalIn - spent : null,
+    // Sem registro de comida o saldo não existe (não é déficit): fica null.
+    balance: base != null && hasRecord ? kcalIn - spent : null,
     mealsDone: meals.filter((m) => m.plan && m.log?.done).length,
     mealsTotal: plannedMeals.length,
     workoutsDone: doneWorkouts.length,

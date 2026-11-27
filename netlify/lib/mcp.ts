@@ -85,14 +85,14 @@ export function buildServer(ctx: ToolContext): McpServer {
 
   server.registerTool('get_day', {
     title: 'Ver dia',
-    description: 'Mostra o plano do dia (refeições e treinos), o que foi feito, extras, kcal consumidas, kcal gastas, saldo e se está dentro da meta.',
+    description: 'Mostra o plano do dia (refeições e treinos), o que foi feito, extras, kcal consumidas, gasto total (gasto basal + treinos, valor real do treino ou estimativa do plano se não houver), saldo (consumido − gasto total; vazio se não houver registro de comida), água, peso e se está dentro da meta.',
     inputSchema: { date: optDate },
     annotations: ro,
   }, wrap('get_day', ctx, tools.getDay))
 
   server.registerTool('get_range', {
     title: 'Ver período',
-    description: 'Registros por dia e métricas do período: adesão a refeições e treinos, médias de kcal ingeridas e gastas, dias dentro da meta e sequência atual. Dias futuros não contam.',
+    description: 'Registros por dia e métricas do período: adesão a refeições e treinos, médias de kcal ingeridas e gastas, dias dentro da meta, sequência atual e o saldo calórico da aba Evolução (metrics.balance). Dias futuros não contam; dias sem registro de comida e o dia de hoje ficam fora do saldo.',
     inputSchema: { from: date, to: date },
     annotations: ro,
   }, wrap('get_range', ctx, tools.getRange))
@@ -119,7 +119,7 @@ export function buildServer(ctx: ToolContext): McpServer {
 
   server.registerTool('log_workout', {
     title: 'Registrar treino',
-    description: 'Registra um treino concluído. Sem workout_id, usa o treino previsto do dia com o mesmo tipo; se não houver, cria um treino avulso. Repetir a chamada atualiza o mesmo registro.',
+    description: 'Registra um treino concluído. Sem workout_id, usa o treino previsto do dia com o mesmo tipo; se não houver, cria um treino avulso. Informe kcal sempre que houver (relógio/Strava): sem kcal, o saldo usa a estimativa do plano. Repetir a chamada atualiza o mesmo registro.',
     inputSchema: {
       date: optDate,
       workout_id: z.string().min(1).optional().describe('workout_id do plano (get_day) ou nome do treino, ex.: "HYROX"'),
@@ -188,7 +188,7 @@ export function buildServer(ctx: ToolContext): McpServer {
 
   server.registerTool('log_weight', {
     title: 'Registrar peso',
-    description: 'Registra o peso em jejum do dia (combinado: segunda e sexta). Repetir com o mesmo valor não duplica. Fotos de evolução são enviadas pelo app.',
+    description: 'Registra o peso em jejum do dia (combinado: segunda e sexta), que aparece na aba Controle de Peso do app (médias semanais e antes/depois). Repetir com o mesmo valor não duplica. As fotos são enviadas pelo app.',
     inputSchema: {
       date: optDate,
       weight_kg: z.number().min(20).max(400).describe('Peso em kg, ex.: 84.5'),
@@ -210,7 +210,7 @@ export function buildServer(ctx: ToolContext): McpServer {
 
   server.registerTool('get_review', {
     title: 'Fechamento do período',
-    description: 'Fechamento da semana, do mês ou acumulado: nota de assertividade (média de calorias na meta, refeições, treinos e água), o que funcionou, onde falhou, extras, evolução do peso (fim de semana e segunda a sexta) e nota por semana.',
+    description: 'Fechamento da semana, do mês ou acumulado. (1) Aba Fechamento: nota de assertividade (calorias na meta, refeições, treinos e água), o que funcionou, onde falhou, extras e peso. (2) Aba Evolução (campo balance): gasto total = gasto basal + kcal reais dos treinos; saldo = consumido − gasto total (negativo = déficit), saldo médio/dia e acumulado, equivalente em gordura (saldo ÷ 7.700, estimativa), dias em déficit e superávit, dias sem registro (fora das médias), treinos que faltaram, comparação com o período anterior (previous_balance) e o dia de hoje em andamento com projeção.',
     inputSchema: {
       period: z.enum(['week', 'month', 'all']).describe('week = semana (seg a dom), month = mês, all = acumulado desde o início'),
       date: optDate.describe('Uma data dentro do período desejado; se omitida, o período atual'),

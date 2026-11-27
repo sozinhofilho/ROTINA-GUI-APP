@@ -1,8 +1,10 @@
 import { useEffect, useState } from 'react'
-import { expandDay, type DayMeal, type DayStats, type DayWorkout } from '../../shared/calc.ts'
+import { expandDay, type DayMeal, type DayStats, type DayView, type DayWorkout } from '../../shared/calc.ts'
+import { balanceDay } from '../../shared/balance.ts'
+import { stableId } from '../../shared/ids.ts'
 import { addDays, formatDayLabel, formatShort, nowHHMM, todayISO, weekdayOf } from '../../shared/dates.ts'
 import { uuid } from '../../shared/logic.ts'
-import type { AppData, ExtraCategory, ExtraEntry, MealLog, WorkoutLog } from '../../shared/types.ts'
+import type { AppData, ExtraCategory, ExtraEntry, MealLog } from '../../shared/types.ts'
 import { MoveWorkoutSheet } from '../components/MoveWorkoutSheet.tsx'
 import { CheckButton, Field, Icon, LazyInput, Sheet } from '../components/ui.tsx'
 import { fmt, toIntOrNull } from '../lib/format.ts'
@@ -43,6 +45,8 @@ export function Today({ date, setDate }: { date: string; setDate: (d: string) =>
       </header>
 
       <Progress stats={day.stats} />
+
+      <DayBalance view={day} isToday={date === today} />
 
       <WaterCard date={date} ml={day.stats.waterMl} goal={day.stats.waterGoal} />
 
@@ -115,27 +119,60 @@ function Progress({ stats }: { stats: DayStats }) {
             {fmt(Math.round(stats.proteinDone))}/{fmt(Math.round(stats.proteinPlanned))} g
           </b>
         </div>
-        <div>
-          <span className="muted">{stats.base != null ? 'Gasto' : 'Gasto treinos'}</span>
-          <b>{fmt(stats.spent)} kcal</b>
-        </div>
-        {stats.balance != null && (
-          <div>
-            <span className="muted">Saldo</span>
-            <b>
-              {stats.balance > 0 ? '+' : ''}
-              {fmt(stats.balance)}
-            </b>
-          </div>
-        )}
       </div>
+    </div>
+  )
+}
+
+/** Saldo do dia: consumido − (gasto basal + treinos feitos). Mesmo cálculo da aba Evolução. */
+function DayBalance({ view, isToday }: { view: DayView; isToday: boolean }) {
+  const b = balanceDay(view, isToday ? view.date : '')
+  const go = () => { window.location.hash = 'plano' }
+  if (b.base == null) {
+    return (
+      <div className="card day-balance">
+        <b>Saldo do dia</b>
+        <p className="muted small">Defina o gasto basal em Ajustes para ver o saldo.</p>
+        <button className="link" onClick={go}>abrir Ajustes</button>
+      </div>
+    )
+  }
+  const tone = (v: number | null) => (v == null ? '' : v < 0 ? 'deficit' : v > 0 ? 'surplus' : '')
+  const sign = (v: number) => `${v > 0 ? '+' : v < 0 ? '−' : ''}${fmt(Math.abs(v))}`
+  return (
+    <div className="card day-balance">
+      <div className="chart-head">
+        <b>Saldo do dia</b>
+        {isToday && <span className="badge">em andamento</span>}
+      </div>
+      <div className="balance-eq">
+        <div><span className="muted small">Consumido</span><b>{fmt(b.kcalIn)}</b></div>
+        <span className="op">−</span>
+        <div>
+          <span className="muted small">Gasto total</span>
+          <b>{fmt(b.spent!)}</b>
+          <span className="muted tiny">basal {fmt(b.base)} + treino {fmt(b.kcalWorkouts)}{b.kcalWorkoutsEstimated ? '*' : ''}</span>
+        </div>
+        <span className="op">=</span>
+        <div className={tone(b.balance)}>
+          <span className="muted small">Saldo</span>
+          <b>{b.balance != null ? sign(b.balance) : '—'}</b>
+          <span className="muted tiny">{b.balance == null ? 'sem registro de comida' : b.balance < 0 ? 'déficit' : b.balance > 0 ? 'superávit' : 'zerado'}</span>
+        </div>
+      </div>
+      {b.projection && b.projection.remainingMeals.length > 0 && b.projection.balance != null && (
+        <p className="small projection">
+          Se fizer {b.projection.remainingMeals.join(', ')} como no plano: consumo {fmt(b.projection.kcalIn)} e saldo <b className={tone(b.projection.balance)}>{sign(b.projection.balance)}</b>.
+        </p>
+      )}
+      {b.kcalWorkoutsEstimated > 0 && <p className="muted tiny">* {fmt(b.kcalWorkoutsEstimated)} kcal de treino estimadas pelo plano (sem valor real registrado).</p>}
     </div>
   )
 }
 
 function emptyMealLog(date: string, m: DayMeal): MealLog {
   return {
-    id: uuid(),
+    id: stableId('meal', date, m.plan?.id ?? m.name),
     date,
     plan_meal_id: m.plan?.id ?? null,
     meal_name: m.name,
@@ -154,9 +191,10 @@ function MealCard({ date, meal }: { date: string; meal: DayMeal }) {
   const plan = meal.plan
   const done = !!log?.done
 
-  const save = (patch: Partial<MealLog>) => {
+  // Envia só o campo alterado: o check nunca apaga kcal real ou observação já registradas.
+  const save = (set: { done?: boolean; kcal_real?: number | null; note?: string }) => {
     const base = log ?? emptyMealLog(date, meal)
-    dispatch({ t: 'meal_log.upsert', row: { ...base, ...patch } })
+    dispatch({ t: 'meal_log.patch', id: base.id, date, plan_meal_id: base.plan_meal_id, meal_name: base.meal_name, kcal_planned: base.kcal_planned, set })
   }
 
   const kcalShown = log?.kcal_real ?? plan?.kcal ?? log?.kcal_planned ?? 0
@@ -222,23 +260,17 @@ function WorkoutCard({ date, item, data }: { date: string; item: DayWorkout; dat
   const { plan, log, movedFrom } = item
   const done = !!log?.done
 
-  const save = (patch: Partial<WorkoutLog>) => {
-    const base: WorkoutLog = log ?? {
-      id: uuid(),
+  // Envia só o campo alterado. Sem valor real, as kcal do plano entram no cálculo como estimativa,
+  // mas nunca são gravadas no registro como se fossem reais.
+  const save = (set: { done?: boolean; duration_min?: number | null; kcal?: number | null; note?: string }) => {
+    dispatch({
+      t: 'workout_log.patch',
+      id: log?.id ?? stableId('workout', date, plan?.id ?? item.name),
       date,
-      plan_workout_id: plan?.id ?? null,
-      name: item.name,
-      done: false,
-      duration_min: plan?.duration_min ?? null,
-      kcal: plan?.kcal ?? null,
-      distance_m: null,
-      avg_hr: null,
-      avg_pace: null,
-      note: '',
-      source: 'manual',
-      strava_activity_id: null,
-    }
-    dispatch({ t: 'workout_log.upsert', row: { ...base, ...patch } })
+      plan_workout_id: log ? log.plan_workout_id : (plan?.id ?? null),
+      name: log?.name || item.name,
+      set,
+    })
   }
 
   const dayPlans = expandDay(date, data).workouts.filter((w) => w.plan).map((w) => w.plan!)
@@ -259,7 +291,7 @@ function WorkoutCard({ date, item, data }: { date: string; item: DayWorkout; dat
             {log?.distance_m ? ` · ${(log.distance_m / 1000).toFixed(1)} km` : ''}
             {log?.avg_pace ? ` · ${log.avg_pace}/km` : ''}
             {log?.avg_hr ? ` · FC ${Math.round(log.avg_hr)}` : ''}
-            {!log?.done && plan?.kcal != null && ' (estimado)'}
+            {log?.kcal == null && plan?.kcal != null && ' (estimado)'}
           </span>
           {plan?.details && <span className="desc">{plan.details}</span>}
         </button>

@@ -7,6 +7,7 @@ import { stableId } from '../../shared/ids.ts'
 import { applyOp, extraId, importDayToOps, PlanError, pruneNoops, sameName } from '../../shared/logic.ts'
 import { diffPlan, formatWeekdays } from '../../shared/plan.ts'
 import { review, reviewText, weeklySeries } from '../../shared/review.ts'
+import { balanceText, energyBalance, previousPeriod, type BalanceDay, type BalanceSummary } from '../../shared/balance.ts'
 import {
   formatZodError,
   ImportDaySchema,
@@ -139,6 +140,7 @@ export async function getRange(ctx: ToolContext, a: { from: string; to: string }
   const data = await ctx.store.load(histFrom, a.to)
   const s = summarize(a.from, a.to, data, t)
   const streak = a.from <= end ? currentStreak(data, end, 120) : 0
+  const bal = energyBalance(a.from, a.to, data, t)
   const metrics = {
     from: a.from,
     to: a.to,
@@ -158,6 +160,8 @@ export async function getRange(ctx: ToolContext, a: { from: string; to: string }
     workouts_adherence_pct: s.pctWorkouts,
     best_streak_in_goal: s.bestStreak,
     current_streak_in_goal: streak,
+    // Mesmo cálculo da aba Evolução: dias sem registro de comida e o dia de hoje ficam fora.
+    balance: balanceData(bal),
   }
   const days = s.daily.map((d) => ({
     date: d.date,
@@ -249,19 +253,21 @@ export async function setMealDone(
   const meal = findMeal(view, a.meal_id)
   if (!meal) throw new ToolError(`Refeição não encontrada nesse dia (${formatBR(date)}). Refeições do dia: ${mealList(view)}.`)
   const log = meal.log
-  const row = {
+  // Muda só "feito" e os campos informados; nada é sobrescrito com valores do plano.
+  const set: { done: boolean; kcal_real?: number | null; note?: string } = { done: a.done }
+  if (a.kcal_real !== undefined) set.kcal_real = a.kcal_real
+  if (a.note !== undefined) set.note = a.note
+  const op: Op = {
+    t: 'meal_log.patch',
     id: log?.id ?? stableId('meal', date, meal.plan?.id ?? meal.name),
     date,
     plan_meal_id: meal.plan?.id ?? log?.plan_meal_id ?? null,
     meal_name: meal.name,
-    done: a.done,
     kcal_planned: meal.plan?.kcal ?? log?.kcal_planned ?? null,
-    kcal_real: a.kcal_real === undefined ? (log?.kcal_real ?? null) : a.kcal_real,
-    note: a.note ?? log?.note ?? '',
-    photo_path: log?.photo_path ?? null,
-    ai_estimate: log?.ai_estimate ?? null,
+    set,
   }
-  const { applied, after } = await commit(ctx, data, [{ t: 'meal_log.upsert', row }])
+  const row = { id: op.id, kcal_real: a.kcal_real !== undefined ? a.kcal_real : (log?.kcal_real ?? null) }
+  const { applied, after } = await commit(ctx, data, [op])
   const v2 = expandDay(date, after)
   const what = `${meal.name} ${a.done ? 'marcado como feito' : 'desmarcado'}${row.kcal_real != null ? ` (${row.kcal_real} kcal reais)` : ''}`
   return {
@@ -312,7 +318,8 @@ export async function logWorkout(
     name: plan?.name ?? log?.name ?? KIND_LABEL[a.type],
     done: true,
     duration_min: a.duration_min,
-    kcal: a.kcal ?? log?.kcal ?? plan?.kcal ?? null,
+    // Sem kcal informada fica vazio: o cálculo usa a estimativa do plano, mas ela não vira "valor real".
+    kcal: a.kcal ?? log?.kcal ?? null,
     distance_m,
     avg_hr: a.avg_hr ?? log?.avg_hr ?? null,
     avg_pace: a.avg_pace ?? log?.avg_pace ?? null,
@@ -322,7 +329,7 @@ export async function logWorkout(
   }
   const { applied, after } = await commit(ctx, data, [{ t: 'workout_log.upsert', row }])
   const v2 = expandDay(date, after)
-  const kcalNote = a.kcal == null && row.kcal != null && log?.kcal == null ? ` (${row.kcal} kcal estimadas pelo plano)` : row.kcal != null ? ` (${row.kcal} kcal)` : ''
+  const kcalNote = row.kcal != null ? ` (${row.kcal} kcal)` : plan?.kcal != null ? ` (sem kcal real: o saldo usa a estimativa do plano, ${plan.kcal} kcal)` : ''
   const what = `${row.name} registrado: ${row.duration_min} min${a.distance_km != null ? `, ${a.distance_km} km` : ''}${kcalNote}${plan ? '' : ' como treino avulso'}`
   return {
     text: `${applied.length ? what : `Sem mudança: ${what}, igual ao que já estava`}. ${totalsLine(v2)}`,
@@ -589,13 +596,16 @@ export async function getReview(ctx: ToolContext, a: { period: 'week' | 'month' 
     from = weekStart(dates[0] ?? t)
     to = t
   }
-  const data = await ctx.store.load(addDays(from, -7), to > t ? to : t)
+  const prevRange = a.period === 'all' ? null : previousPeriod(a.period === 'week' ? 'semana' : 'mes', from)
+  const data = await ctx.store.load(prevRange ? prevRange.from : addDays(from, -7), to > t ? to : t)
   const unit = a.period === 'week' ? 'Semana' : a.period === 'month' ? 'Mês' : 'Período'
   const r = review(from, to, data, t, unit)
   const weeks = a.period === 'week' ? [] : weeklySeries(from, to, data, t)
   const title = a.period === 'week' ? `Semana ${formatBR(from)} a ${formatBR(to)}` : a.period === 'month' ? `Mês ${from.slice(5, 7)}/${from.slice(0, 4)}` : `Acumulado desde ${formatBR(from)}`
+  const bal = energyBalance(from, to, data, t)
+  const prevBal = prevRange ? energyBalance(prevRange.from, prevRange.to, data, t) : null
   return {
-    text: reviewText(r, title),
+    text: `${reviewText(r, title)}\n${balanceText(bal, prevBal)}`,
     data: {
       from, to, days: r.days, score: r.score, verdict: r.verdict,
       pillars: r.pillars, avg_kcal_in: r.avgKcalIn, goal: r.goal, days_above: r.daysAbove, days_below: r.daysBelow,
@@ -603,6 +613,47 @@ export async function getReview(ctx: ToolContext, a: { period: 'week' | 'month' 
       weights: r.weights, weight_delta_kg: r.weightDelta, weight_changes: r.weightChanges,
       wins: r.wins, misses: r.misses,
       weeks: weeks.map((w) => ({ week_start: w.weekStart, score: w.score, days_in_goal: w.daysInGoal, days: w.days, avg_kcal_in: w.avgKcalIn, weight_kg: w.weightKg })),
+      balance: balanceData(bal),
+      previous_balance: prevBal ? balanceData(prevBal) : null,
     },
+  }
+}
+
+/** Mesmos números da aba Evolução, em JSON. */
+export function balanceData(b: BalanceSummary) {
+  const day = (d: BalanceDay) => ({
+    date: d.date,
+    in_progress: d.inProgress,
+    has_food: d.hasFood,
+    kcal_in: d.kcalIn,
+    kcal_workouts: d.kcalWorkouts,
+    kcal_workouts_estimated: d.kcalWorkoutsEstimated,
+    spent_total: d.spent,
+    balance: d.balance,
+    projection: d.projection ? { kcal_in: d.projection.kcalIn, balance: d.projection.balance, remaining_meals: d.projection.remainingMeals } : null,
+  })
+  return {
+    from: b.from,
+    to: b.to,
+    base_expenditure: b.base,
+    needs_base_expenditure: b.base == null,
+    closed_days: b.closedDays,
+    days_with_food: b.daysWithFood,
+    days_without_food: b.daysWithoutFood,
+    workouts_done: b.workoutsDone,
+    workouts_planned: b.workoutsPlanned,
+    missed_workouts: b.missedWorkouts,
+    workout_kcal_total: b.workoutKcalTotal,
+    workout_kcal_estimated: b.workoutKcalEstimated,
+    workout_kcal_avg_per_day: b.workoutKcalAvgPerDay,
+    avg_kcal_in: b.avgKcalIn,
+    avg_spent_total: b.avgSpent,
+    avg_balance: b.avgBalance,
+    total_balance: b.totalBalance,
+    fat_kg_estimate: b.fatKg,
+    deficit_days: b.deficitDays,
+    surplus_days: b.surplusDays,
+    today: b.today ? day(b.today) : null,
+    daily: b.daily.map(day),
   }
 }

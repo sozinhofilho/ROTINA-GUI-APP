@@ -255,3 +255,28 @@ export function reviewText(r: Review, title: string): string {
   if (r.misses.length) lines.push(`Falhou: ${r.misses.join(' ')}`)
   return lines.join('\n')
 }
+
+export interface WeeklyWeight {
+  weekStart: string
+  avg: number
+  count: number
+  /** Variação da média em relação à semana anterior com peso registrado. */
+  delta: number | null
+}
+
+/** Média do peso por semana (segunda a domingo) e variação contra a semana anterior. */
+export function weeklyWeightAverages(data: AppData, from: string, to: string): WeeklyWeight[] {
+  const groups = new Map<string, number[]>()
+  for (const p of weightPoints(data, from, to)) {
+    const ws = weekStart(p.date)
+    groups.set(ws, [...(groups.get(ws) ?? []), p.kg])
+  }
+  const out: WeeklyWeight[] = []
+  for (const ws of [...groups.keys()].sort()) {
+    const arr = groups.get(ws)!
+    const avg = Math.round((arr.reduce((a, b) => a + b, 0) / arr.length) * 10) / 10
+    const prev = out[out.length - 1]
+    out.push({ weekStart: ws, avg, count: arr.length, delta: prev ? Math.round((avg - prev.avg) * 10) / 10 : null })
+  }
+  return out
+}

@@ -10,14 +10,14 @@ import { formatZodError, ImportDaySchema, ImportPlanSchema, MutateBodySchema, ty
 import type { AppData, DataResponse } from '../shared/types.ts'
 import { DEFAULT_SETTINGS } from '../shared/types.ts'
 
-const KEY = 'rotina:demo:v2'
+const KEY = 'rotina:demo:v3'
 
 function sampleData(): AppData {
   const { meals, workouts } = importPlanToRows(ImportPlanSchema.parse(seedPlan))
   // ids estáveis para o plano da demo
   const plan_meals = meals.map((m) => ({ ...m, id: stableId('demo-meal', m.weekday, m.name) }))
   const plan_workouts = workouts.map((w) => ({ ...w, id: stableId('demo-workout', w.weekday, w.name) }))
-  let data: AppData = { settings: { ...DEFAULT_SETTINGS }, plan_meals, plan_workouts, overrides: [], meal_logs: [], workout_logs: [], extras: [], water: [], body: [] }
+  let data: AppData = { settings: { ...DEFAULT_SETTINGS, base_expenditure: 2300 }, plan_meals, plan_workouts, overrides: [], meal_logs: [], workout_logs: [], extras: [], water: [], body: [] }
   const today = todayISO()
   // 5 semanas de exemplo, com padrão realista: fins de semana mais soltos.
   const rnd = (i: number) => ((i * 9301 + 49297) % 233280) / 233280
@@ -37,7 +37,7 @@ function sampleData(): AppData {
       date: d,
       meals: expandDay(d, data).meals.filter((m) => !skip.includes(m.name)).map((m) => ({ name: m.name })),
       extras,
-      workouts: r > 0.18 || weekend ? expandDay(d, data).workouts.map((w) => ({ name: w.name, duration_min: w.plan?.duration_min ?? 60 })) : [],
+      workouts: r > 0.18 || weekend ? expandDay(d, data).workouts.map((w) => ({ name: w.name, duration_min: w.plan?.duration_min ?? 60, kcal: r > 0.5 && w.plan?.kcal ? Math.round(w.plan.kcal * (0.9 + r * 0.3)) : null })) : [],
     }
     data = importDayToOps(ImportDaySchema.parse(day), data).reduce(applyOp, data)
     data = applyOp(data, { t: 'water.set', row: { date: d, ml: weekend ? 3000 + Math.round(r * 4) * 500 : 4000 + Math.round(r * 3) * 500 } })

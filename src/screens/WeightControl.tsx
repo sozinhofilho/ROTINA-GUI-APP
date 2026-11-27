@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { addDays, formatBR, formatShort, todayISO, WEEKDAY_SHORT, weekdayOf } from '../../shared/dates.ts'
-import { weightChanges, weightPoints } from '../../shared/review.ts'
+import { weeklyWeightAverages, weightChanges, weightPoints } from '../../shared/review.ts'
 import type { BodyCheckin } from '../../shared/types.ts'
 import { WeightChart } from '../components/Charts.tsx'
 import { Field } from '../components/ui.tsx'
@@ -10,7 +10,8 @@ import { ensureRange, useStore } from '../lib/store.ts'
 const label = (b: BodyCheckin) => `${WEEKDAY_SHORT[weekdayOf(b.date)]} ${formatShort(b.date)}${b.weight_kg != null ? ` · ${formatKg(b.weight_kg)} kg` : ''}`
 const signedKg = (v: number) => `${v > 0 ? '+' : v < 0 ? '−' : ''}${formatKg(Math.abs(v))} kg`
 
-export function Progress() {
+/** Tela "Controle de Peso": peso de segunda e sexta, médias semanais, fotos de antes e depois. */
+export function WeightControl() {
   const data = useStore((s) => s.view)
   const firstDate = useStore((s) => s.firstDate)
   const urls = useStore((s) => s.photoUrls)
@@ -31,6 +32,8 @@ export function Progress() {
   const changes = weightChanges(data, from, today)
   const a = withPhotos.find((b) => b.date === before) ?? withPhotos[0]
   const b = withPhotos.find((x) => x.date === after) ?? withPhotos[withPhotos.length - 1]
+  const weekly = weeklyWeightAverages(data, from, today)
+  const thisWeek = weekly[weekly.length - 1]
   const total = points.length >= 2 ? Math.round((points[points.length - 1].kg - points[0].kg) * 10) / 10 : null
   const avgWeekend = (() => {
     const w = changes.filter((c) => c.label === 'Fim de semana')
@@ -40,12 +43,12 @@ export function Progress() {
   return (
     <div className="screen">
       <header className="screen-head">
-        <h1>Evolução</h1>
+        <h1>Controle de Peso</h1>
       </header>
 
       <div className="card">
         <div className="chart-head">
-          <b>Peso</b>
+          <b>Pesagens (segunda e sexta)</b>
           {total != null && <span className={`badge ${total <= 0 ? 'dentro' : 'acima'}`}>{signedKg(total)} desde {formatShort(points[0].date)}</span>}
         </div>
         <WeightChart points={points} />
@@ -53,6 +56,30 @@ export function Progress() {
           <p className="muted small">Média do fim de semana (sexta → segunda): <b>{signedKg(avgWeekend)}</b> em {changes.filter((c) => c.label === 'Fim de semana').length} fim(ns) de semana.</p>
         )}
       </div>
+
+      {weekly.length > 0 && (
+        <div className="card">
+          <div className="chart-head">
+            <b>Média semanal</b>
+            {thisWeek.delta != null && (
+              <span className={`badge ${thisWeek.delta <= 0 ? 'dentro' : 'acima'}`}>{signedKg(thisWeek.delta)} vs semana anterior</span>
+            )}
+          </div>
+          <p className="weekly-now">
+            <b>{formatKg(thisWeek.avg)} kg</b> <span className="muted small">semana de {formatShort(thisWeek.weekStart)} · {thisWeek.count} pesagem(ns)</span>
+          </p>
+          {weekly.length > 1 && <WeightChart points={weekly.map((w) => ({ date: w.weekStart, kg: w.avg }))} />}
+          <ul className="weights">
+            {[...weekly].reverse().slice(0, 8).map((w) => (
+              <li key={w.weekStart}>
+                <span>Semana de {formatShort(w.weekStart)}</span>
+                <span className="muted small">{w.count}x</span>
+                <b>{formatKg(w.avg)} kg {w.delta != null && <span className={w.delta > 0 ? 'up' : 'down'}>({signedKg(w.delta)})</span>}</b>
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
 
       <section>
         <h2 className="section-title">Antes e depois</h2>

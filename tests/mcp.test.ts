@@ -213,7 +213,9 @@ describe('log_workout', () => {
   it('corrida com distância e pace; sem previsto vira avulso', async () => {
     const c = await client()
     await call(c, 'log_workout', { date: '2026-11-24', type: 'run', duration_min: 33, distance_km: 6, avg_pace: '5:30' })
-    expect(expandDay('2026-11-24', store.data).workouts.find((w) => w.plan?.name === 'Corrida leve 6 km')?.log).toMatchObject({ distance_m: 6000, avg_pace: '5:30', kcal: 450 })
+    expect(expandDay('2026-11-24', store.data).workouts.find((w) => w.plan?.name === 'Corrida leve 6 km')?.log).toMatchObject({ distance_m: 6000, avg_pace: '5:30', kcal: null })
+    // Sem kcal real: o cálculo usa a estimativa do plano (450) e marca como estimada.
+    expect(expandDay('2026-11-24', store.data).stats).toMatchObject({ kcalWorkouts: 450, kcalWorkoutsEstimated: 450 })
     const r = await call(c, 'log_workout', { date: WED, type: 'run', duration_min: 20 })
     expect(r.content[0].text).toMatch(/avulso/)
     await call(c, 'log_workout', { date: WED, type: 'run', duration_min: 20 })
@@ -415,7 +417,7 @@ describe('arquivo de exportação (mesma planilha do app)', () => {
     await call(c, 'add_extra', { date: WED, description: '2 cervejas', kcal: 300 })
     const sheets = buildExportSheets(store.data, '2026-11-23', WED, WED)
     const buf = XLSX.write(buildWorkbook(XLSX, sheets) as never, { type: 'buffer', bookType: 'xlsx' }) as Buffer
-    expect(XLSX.read(buf).SheetNames).toEqual(['Resumo diário', 'Refeições', 'Treinos', 'Extras', 'Resumo semanal', 'Peso'])
+    expect(XLSX.read(buf).SheetNames).toEqual(['Resumo diário', 'Refeições', 'Treinos', 'Extras', 'Resumo semanal', 'Evolução', 'Peso'])
     const csv = buildCsv(XLSX, sheets)
     expect(csv).toContain('# Extras')
     expect(csv).toContain('2 cervejas;Outro;300'.replace('Outro', 'Álcool'))
@@ -502,5 +504,34 @@ describe('get_review', () => {
   })
   it('valida', async () => {
     await expectInvalid(await client(), 'get_review', { period: 'ano' })
+  })
+})
+
+describe('Evolução no conector (mesmos números do app)', () => {
+  it('get_review traz o saldo igual ao energyBalance e get_range não conta dia sem registro como déficit', async () => {
+    const c = await client()
+    await call(c, 'update_plan', { plan_json: { replace: false, settings: { base_expenditure: 2300 } }, confirm: true })
+    await call(c, 'import_json', { payload: { date: '2026-11-23', meals: ['Café da manhã', 'Almoço', 'Lanche da tarde', 'Jantar', 'Ceia'].map((name) => ({ name })), workouts: [{ name: 'HYROX', duration_min: 60, kcal: 812 }] }, confirm: true })
+    await call(c, 'set_meal_done', { date: WED, meal_id: 'café da manhã', done: true })
+    const r = await call(c, 'get_review', { period: 'week', date: WED })
+    const bal = (r.structuredContent as { balance: Record<string, unknown> }).balance
+    const { energyBalance } = await import('../shared/balance.ts')
+    const app = energyBalance('2026-11-23', '2026-11-29', store.data, WED)
+    expect(bal).toMatchObject({ total_balance: app.totalBalance, avg_balance: app.avgBalance, days_with_food: 1, days_without_food: 1, fat_kg_estimate: app.fatKg })
+    expect(bal.total_balance).toBe(2501 - 2300 - 812)
+    expect((bal.today as { projection: { balance: number } }).projection.balance).toBe(2501 - 2300)
+    expect(r.content[0].text).toMatch(/Saldo: −611 kcal acumulado/)
+    expect(r.content[0].text).toMatch(/1 dia\(s\) sem registro/)
+    const g = await call(c, 'get_range', { from: '2026-11-23', to: WED })
+    const days = (g.structuredContent as { days: { date: string; balance: number | null }[] }).days
+    expect(days.find((x) => x.date === '2026-11-24')!.balance).toBeNull()
+    expect(days.find((x) => x.date === '2026-11-23')!.balance).toBe(-611)
+  })
+  it('set_meal_done não apaga a kcal real ao desmarcar e marcar de novo', async () => {
+    const c = await client()
+    await call(c, 'set_meal_done', { date: WED, meal_id: 'lanche da tarde', done: true, kcal_real: 735, note: 'pão francês' })
+    await call(c, 'set_meal_done', { date: WED, meal_id: 'lanche da tarde', done: false })
+    await call(c, 'set_meal_done', { date: WED, meal_id: 'lanche da tarde', done: true })
+    expect(store.data.meal_logs[0]).toMatchObject({ done: true, kcal_real: 735, note: 'pão francês' })
   })
 })

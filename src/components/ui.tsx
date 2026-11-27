@@ -37,6 +37,7 @@ const PATHS = {
   close: <path d="M6 6l12 12M18 6L6 18" />,
   sparkle: <path d="M12 3l2 6 6 2-6 2-2 6-2-6-6-2 6-2z" />,
   cloud: <path d="M7 18h10a4 4 0 0 0 .5-8A6 6 0 0 0 6 9a4.5 4.5 0 0 0 1 9z" />,
+  trend: <path d="M4 17l5-5 4 3 7-8M15 7h5v5" />,
   body: (
     <>
       <circle cx="12" cy="5" r="2.5" />

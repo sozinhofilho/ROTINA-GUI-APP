@@ -17,6 +17,35 @@ export async function applyOpDb(op: Op): Promise<void> {
       }
       return
     }
+    case 'meal_log.patch': {
+      // Atualiza só os campos enviados; o check nunca apaga kcal real, observação etc.
+      let q = s.from('meal_logs').select('id')
+      q = op.plan_meal_id ? q.eq('date', op.date).eq('plan_meal_id', op.plan_meal_id) : q.eq('id', op.id)
+      const ex = must(await q.maybeSingle()) as { id: string } | null
+      if (ex) {
+        if (Object.keys(op.set).length) must(await s.from('meal_logs').update({ ...op.set, updated_at: now() }).eq('id', ex.id))
+      } else {
+        must(await s.from('meal_logs').insert({
+          id: op.id, date: op.date, plan_meal_id: op.plan_meal_id, meal_name: op.meal_name, kcal_planned: op.kcal_planned,
+          done: false, ...op.set, updated_at: now(),
+        }))
+      }
+      return
+    }
+    case 'workout_log.patch': {
+      let q = s.from('workout_logs').select('id')
+      q = op.plan_workout_id ? q.eq('date', op.date).eq('plan_workout_id', op.plan_workout_id) : q.eq('id', op.id)
+      const ex = must(await q.maybeSingle()) as { id: string } | null
+      if (ex) {
+        if (Object.keys(op.set).length) must(await s.from('workout_logs').update({ ...op.set, updated_at: now() }).eq('id', ex.id))
+      } else {
+        must(await s.from('workout_logs').insert({
+          id: op.id, date: op.date, plan_workout_id: op.plan_workout_id, name: op.name, source: 'manual',
+          done: false, ...op.set, updated_at: now(),
+        }))
+      }
+      return
+    }
     case 'meal_log.delete':
       must(await s.from('meal_logs').delete().eq('id', op.id))
       return

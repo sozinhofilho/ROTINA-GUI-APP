@@ -142,7 +142,8 @@ function newWorkout(weekday: number): PlanWorkout {
 function SettingsCard({ settings }: { settings: Settings }) {
   const update = (row: Partial<Settings>) => dispatch({ t: 'settings.update', row })
   return (
-    <div className="card settings">
+    <div className="card settings" id="ajustes">
+      <b>Ajustes</b>
       <div className="grid4 settings-grid">
         <Field label="Meta (kcal)">
           {(id) => (
@@ -162,7 +163,7 @@ function SettingsCard({ settings }: { settings: Settings }) {
               }} />
           )}
         </Field>
-        <Field label="Gasto base">
+        <Field label="Gasto basal">
           {(id) => (
             <LazyInput id={id} inputMode="numeric" value={settings.base_expenditure?.toString() ?? ''} placeholder="opcional"
               onCommit={(v) => update({ base_expenditure: toIntOrNull(v) })} />
@@ -180,7 +181,7 @@ function SettingsCard({ settings }: { settings: Settings }) {
       </div>
       <small className="muted">
         Dentro da meta: {fmt(Math.round(settings.calorie_goal * (1 - settings.tolerance_pct / 100)))} a{' '}
-        {fmt(Math.round(settings.calorie_goal * (1 + settings.tolerance_pct / 100)))} kcal. Gasto base = gasto diário sem treino (opcional).
+        {fmt(Math.round(settings.calorie_goal * (1 + settings.tolerance_pct / 100)))} kcal. Gasto basal = quanto você gasta por dia sem treino (kcal). É a base do saldo na aba Evolução.
       </small>
     </div>
   )
